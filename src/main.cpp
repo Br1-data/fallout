@@ -7,7 +7,7 @@ Game G;
 void SetGameState(GameState s) {
     G.prevState = G.state;
     G.state = s;
-    bool captured = s == GS_PLAY || s == GS_VATS || s == GS_LOCKPICK;
+    bool captured = s == GS_PLAY || s == GS_SCAN || s == GS_LOCKPICK;
     if (captured) {
         if (!IsCursorHidden()) DisableCursor();
         G.mouseSkip = 3;
@@ -40,11 +40,12 @@ void NewGame() {
     G.gameStarted = true;
     SetGameState(GS_PLAY);
     Notify("Parla con il Sovrintendente: guardalo e premi E.", Col(255, 230, 140));
-    Notify("TAB apre il Pip-Boy. ESC mette in pausa.", Col(200, 230, 200));
+    Notify("TAB apre il Pip-Boy, Q lo scanner. ESC mette in pausa.", Col(200, 230, 200));
 }
 
 void ChangeZone(int zone, Vector3 pos, float yaw) {
     Player& P = G.player;
+    bool newZone = P.zone != zone;
     P.zone = zone;
     float base = zone == ZONE_WASTE ? TerrainHeight(pos.x, pos.z) : W.zones[zone].floorY;
     pos.y = GroundHeight(zone, V3(pos.x, base + 0.6f, pos.z), 0.6f);
@@ -56,7 +57,7 @@ void ChangeZone(int zone, Vector3 pos, float yaw) {
     P.fallStartY = pos.y;
     FxClear();
     QuestsOnEnterZone(zone);
-    BigNotify(zone == ZONE_WASTE ? "TERRE BRUCIATE" : W.zones[zone].name);
+    if (newZone) BigNotify(zone == ZONE_WASTE ? "TERRE BRUCIATE" : W.zones[zone].name);
     SaveGame(0);
 }
 
@@ -164,26 +165,23 @@ static void UpdateFrame(float rdt) {
         case GS_PLAY: {
             if (IsKeyPressed(KEY_ESCAPE)) { SetGameState(GS_PAUSE); break; }
             if (IsKeyPressed(KEY_TAB)) { PlaySfx(SFX_UI_OK); SetGameState(GS_PIPBOY); break; }
-            if (IsKeyPressed(KEY_Q)) { VatsEnter(); if (G.state != GS_PLAY) break; }
+            if (IsKeyPressed(KEY_Q)) { ScanEnter(); break; }
             if (IsKeyPressed(KEY_F5)) {
-                if (G.inCombat) Notify("Non puoi salvare durante un combattimento.", Col(255, 160, 100));
+                if (G.chased) Notify("Non puoi salvare mentre qualcuno ti insegue.", Col(255, 160, 100));
                 else if (SaveGame(6)) Notify("Salvataggio rapido completato.");
             }
             if (IsKeyPressed(KEY_F9) && SaveExists(6)) { LoadGame(6); break; }
-            float wdt = rdt * (G.player.jetTimer > 0 ? 0.45f : 1.0f);
             PlayerUpdate(rdt);
-            if (G.state != GS_PLAY && G.state != GS_DEAD) { UpdateCamera3D(); break; }
-            WorldTick(wdt);
+            if (G.state != GS_PLAY) { UpdateCamera3D(); break; }
+            WorldTick(rdt);
             QuestsUpdate(rdt);
-            AdvanceTime(wdt);
+            AdvanceTime(rdt);
             UpdateCamera3D();
             break;
         }
-        case GS_VATS:
-            VatsUpdate(rdt);
-            if (G.vatsExec) WorldTick(rdt * 0.3f);
+        case GS_SCAN:
+            ScanUpdate(rdt);
             UpdateCamera3D();
-            G.cam.fovy *= G.vatsExec ? 0.85f : 0.75f;
             break;
         case GS_PIPBOY: PipBoyUpdate(); break;
         case GS_DIALOGUE: DialogueUpdate(); UpdateCamera3D(); break;
@@ -193,7 +191,7 @@ static void UpdateFrame(float rdt) {
         case GS_TERMINAL: TerminalUpdate(rdt); break;
         case GS_LEVELUP: LevelUpUpdate(); break;
         case GS_PAUSE: PauseUpdate(); break;
-        case GS_DEAD: DeadUpdate(); FxUpdate(rdt); break;
+        case GS_FAINT: FaintUpdate(); FxUpdate(rdt); break;
         case GS_ENDING: EndingUpdate(rdt); break;
         case GS_SLEEP: {
             float before = G.timeOfDay;
@@ -235,6 +233,15 @@ static void DrawWorld() {
         l.flicker = fixed ? 0.0f : 0.5f;
         lights.push_back(l);
     }
+    if (zone == ZONE_WASTE && G.flags["farm_power"]) {
+        // la fattoria con il generatore riparato
+        LightSrc l;
+        l.pos = V3(-112, TerrainHeight(-112, 165) + 2.8f, 165);
+        l.color = Col(255, 210, 140);
+        l.range = 14;
+        l.intensity = 1.3f;
+        lights.push_back(l);
+    }
     RenderSetLights(lights, cam.position, G.time);
     DrawZoneStatic(zone, cam, z.outdoor ? 420.0f : 140.0f);
     InteractablesDraw(cam);
@@ -244,8 +251,7 @@ static void DrawWorld() {
     DrawSigns(zone, cam);
     EntitiesDrawShadows(cam);
     FxDraw(cam);
-    bool showWeapon = G.state == GS_PLAY || G.state == GS_VATS || G.state == GS_DIALOGUE || G.state == GS_LOOT;
-    if (showWeapon && G.state != GS_DIALOGUE && !(G.state == GS_VATS && !G.vatsExec)) DrawViewModel();
+    if (G.state == GS_PLAY || G.state == GS_LOOT) DrawViewModel();
     EndMode3D();
 }
 
@@ -259,7 +265,7 @@ static void DrawFrame() {
         case GS_INTRO: IntroDraw(); break;
         case GS_CREATE: CreateDraw(); break;
         case GS_PLAY: HudDraw(); break;
-        case GS_VATS: HudDraw(); VatsDraw(); break;
+        case GS_SCAN: HudDraw(); ScanDraw(); break;
         case GS_PIPBOY: PipBoyDraw(); break;
         case GS_DIALOGUE: DialogueDraw(); break;
         case GS_BARTER: BarterDraw(); break;
@@ -268,7 +274,7 @@ static void DrawFrame() {
         case GS_TERMINAL: TerminalDraw(); break;
         case GS_LEVELUP: LevelUpDraw(); break;
         case GS_PAUSE: PauseDraw(); break;
-        case GS_DEAD: DeadDraw(); break;
+        case GS_FAINT: FaintDraw(); break;
         case GS_ENDING: EndingDraw(); break;
         case GS_SLEEP: SleepDraw(); break;
         case GS_SAVELOAD: SaveLoadDraw(); break;
@@ -317,58 +323,18 @@ static void SimTick(float dt) {
     WorldTick(dt);
     QuestsUpdate(dt);
     UpdateCamera3D();
-    if (G.state == GS_DEAD) G.state = GS_PLAY;
+    if (G.fade < 0) G.fade = std::min(0.0f, G.fade + dt * 2.0f);
+    if (G.state == GS_FAINT) G.state = GS_PLAY;
 }
 
 static void Sim(float seconds) {
     for (float t = 0; t < seconds; t += 1.0f / 30) SimTick(1.0f / 30);
 }
 
-static int NearestHostile(float radius) {
-    int best = -1;
-    float bd = radius;
-    for (int i = 0; i < (int)G.ents.size(); i++) {
-        Entity& e = G.ents[i];
-        if (e.dead || !e.hostile || e.zone != G.player.zone) continue;
-        float d = Vector3Distance(e.pos, G.player.pos);
-        if (d < bd) { bd = d; best = i; }
-    }
-    return best;
-}
-
-// combatte finché non restano nemici nel raggio indicato
-static int AutoFight(float seconds, float radius) {
-    int kills0 = G.player.kills;
-    for (float t = 0; t < seconds; t += 1.0f / 30) {
-        int ti = NearestHostile(radius);
-        if (ti < 0) { printf("   [fight] nessun nemico entro %.0fm dopo %.1fs\n", radius, t); break; }
-        if (fmodf(t, 5.0f) < 1.0f / 30) printf("   [fight] t=%.0f bersaglio %s d=%.1f hp=%.0f mag=%d riserva=%d PF=%.0f\n", t, G.ents[ti].name.c_str(), Vector3Distance(G.ents[ti].pos, G.player.pos), G.ents[ti].hp, G.player.mag, G.player.inv.Count(CurrentWeapon().ammo), G.player.hp);
-        Entity& e = G.ents[ti];
-        Vector3 aim = EntityPartPos(e, 0);
-        if (!LineOfSight(G.player.zone, PlayerEye(), aim) || Vector3Distance(G.player.pos, e.pos) > 40) {
-            for (int k = 0; k < 16; k++) {
-                float a = k * PI / 8, r = k < 8 ? 4.0f : 8.0f;
-                Vector3 p = e.pos + V3(sinf(a) * r, 0, cosf(a) * r);
-                float base = G.player.zone == ZONE_WASTE ? TerrainHeight(p.x, p.z) : 0;
-                p.y = GroundHeight(G.player.zone, V3(p.x, std::max(base, e.pos.y) + 1.0f, p.z), 1.0f);
-                if (CircleBlocked(G.player.zone, p, 0.35f, 1.75f, 0.5f)) continue;
-                if (!LineOfSight(G.player.zone, p + V3(0, 1.62f, 0), aim)) continue;
-                G.player.pos = p;
-                break;
-            }
-        }
-        Vector3 to = aim - PlayerEye();
-        G.player.yaw = atan2f(to.x, to.z);
-        G.player.pitch = atan2f(to.y, sqrtf(to.x * to.x + to.z * to.z));
-        UpdateCamera3D();
-        const WeaponDef& w = CurrentWeapon();
-        if (G.player.fireCd <= 0 && G.player.reloadT <= 0 && G.player.equipT <= 0) {
-            if (!w.melee && G.player.mag <= 0) PlayerReload();
-            else PlayerFire();
-        }
-        SimTick(1.0f / 30);
-    }
-    return G.player.kills - kills0;
+// completa una dissolvenza in corso (scorta fuori, svenimento, viaggio)
+static void FinishFade() {
+    if (G.fade > 0 && G.pendingZone >= 0) ChangeZone(G.pendingZone, G.pendingPos, G.pendingYaw);
+    G.fade = 0;
 }
 
 static bool ChooseOption(const char* contains) {
@@ -383,13 +349,8 @@ static bool ChooseOption(const char* contains) {
             return true;
         }
     printf("   opzione non trovata: %s\n", contains);
+    for (auto& o : G.dlg.opts) printf("      - %s\n", o.text.c_str());
     return false;
-}
-
-static const char* TagFind(const char* skill) {
-    static std::string t;
-    t = std::string("[") + skill;
-    return t.c_str();
 }
 
 static int FindNpc(const char* dlg) {
@@ -398,13 +359,64 @@ static int FindNpc(const char* dlg) {
     return -1;
 }
 
+static int InterIdx(const char* tag) {
+    Interactable* it = FindInterByTag(tag);
+    return it ? (int)(it - &G.inters[0]) : -1;
+}
+
 static void Teleport(int zone, float x, float z) {
     ChangeZone(zone, V3(x, 0, z), 0);
     G.messages.clear();
 }
 
+static void LootAll(int idx) {
+    if (idx < 0) return;
+    Interactable& it = G.inters[idx];
+    it.locked = false;
+    Interact(idx);
+    for (auto s : it.inv.items) GiveItem(s.id, s.count, false);
+    it.inv.Clear();
+    SetGameState(GS_PLAY);
+}
+
+// scatta una foto a un bersaglio cercando un punto libero e in vista attorno a esso
+static bool Snap(Vector3 target, float dist) {
+    Player& P = G.player;
+    size_t before = P.photos.size();
+    P.tool = TOOL_CAMERA;
+    for (int k = 0; k < 16; k++) {
+        float a = k * PI / 8, d = dist * (k < 8 ? 1.0f : 0.6f);
+        Vector3 p = target + V3(sinf(a) * d, 0, cosf(a) * d);
+        float base = P.zone == ZONE_WASTE ? TerrainHeight(p.x, p.z) : W.zones[P.zone].floorY;
+        p.y = GroundHeight(P.zone, V3(p.x, std::max(base, target.y - 1.0f) + 1.0f, p.z), 1.0f);
+        if (CircleBlocked(P.zone, p, 0.35f, 1.75f, 0.5f)) continue;
+        P.pos = p;
+        Vector3 to = target - PlayerEye();
+        P.yaw = atan2f(to.x, to.z);
+        P.pitch = atan2f(to.y, sqrtf(to.x * to.x + to.z * to.z));
+        UpdateCamera3D();
+        Vector3 seen = target + Vector3Normalize(G.cam.position - target) * std::min(3.5f, d * 0.5f);
+        if (!LineOfSight(P.zone, G.cam.position, seen)) continue;
+        P.useCd = 0;
+        TakePhoto();
+        if (P.photos.size() > before) return true;
+    }
+    return false;
+}
+
+static Entity* FirstOfKind(EntKind k, int zone, Vector3 near, float radius) {
+    Entity* best = nullptr;
+    float bd = radius;
+    for (auto& e : G.ents) {
+        if (e.kind != k || e.zone != zone) continue;
+        float d = DistXZ(e.pos, near);
+        if (d < bd) { bd = d; best = &e; }
+    }
+    return best;
+}
+
 static void DrawAllScreens() {
-    GameState states[] = {GS_MENU, GS_PLAY, GS_PIPBOY, GS_PAUSE, GS_SAVELOAD, GS_OPTIONS, GS_DEAD, GS_SLEEP, GS_LEVELUP};
+    GameState states[] = {GS_MENU, GS_PLAY, GS_SCAN, GS_PIPBOY, GS_PAUSE, GS_SAVELOAD, GS_OPTIONS, GS_FAINT, GS_SLEEP, GS_LEVELUP};
     GameState keep = G.state;
     for (GameState st : states) {
         G.state = st;
@@ -423,9 +435,10 @@ static void DrawAllScreens() {
 }
 
 static int RunSelfTest() {
-    printf("=== SELF-TEST DUSTFALL ===\n");
+    printf("=== SELF-TEST DUSTFALL (avventura senza violenza) ===\n");
     NewGame();
     Player& P = G.player;
+    const float SAFE = 99999;
     Check(P.zone == ZONE_VAULT, "inizio nel Rifugio");
     int ov = FindNpc("overseer");
     Check(ov >= 0, "Sovrintendente presente");
@@ -434,12 +447,17 @@ static int RunSelfTest() {
     ChooseOption("Farò del mio meglio");
     ChooseOption("Tornerò");
     Check(QUESTS[Q_MAIN].stage == 20, "missione principale avviata (stadio 20)");
-    Check(P.inv.Count(I_PISTOL) == 1 && P.weapon == I_PISTOL, "pistola ricevuta ed equipaggiata");
-    Check(P.mag > 0, "caricatore pieno");
+    Check(P.inv.Count(I_CAMERA) == 1 && P.tool == TOOL_CAMERA, "fotocamera ricevuta e in mano");
+    Check(P.inv.Count(I_BAIT) == 3 && P.inv.Count(I_NOISE) == 3, "esche e barattoli ricevuti");
     Interactable* door = FindInterByTag("vault_door_in");
-    Interact((int)(door - &G.inters[0]));
+    Interact(InterIdx("vault_door_in"));
     Sim(5);
     Check(door->open && !W.zones[ZONE_VAULT].boxes[door->collider].enabled, "porta del Rifugio aperta");
+    Snap(V3(-22, 3.5f, 8), 9);
+    Check(HasPhoto("reactor"), "foto del reattore");
+
+    // --- Ferrocittà ---
+    P.catchImmune = SAFE;
     Teleport(ZONE_WASTE, 0, 62);
     Sim(1.5f);
     Check(W.locations[1].discovered, "Ferrocittà scoperta");
@@ -447,143 +465,321 @@ static int RunSelfTest() {
     int sh = FindNpc("sheriff");
     DialogueStart(sh);
     ChooseOption("Cerco la Base");
-    ChooseOption("Allora gliela");
-    ChooseOption("Affare fatto");
-    Check(QUESTS[Q_MAIN].stage == 40, "stadio 40: recupera la tessera");
-    // missione secondaria: radscarafaggi
+    ChooseOption("Allora ci parlerò");
+    ChooseOption("Buono a sapersi");
+    Check(QUESTS[Q_MAIN].stage == 40, "stadio 40: ottieni la tessera");
+    for (int i = 0; i < SK_COUNT; i++) P.skillPts[i] = 60; // come dopo qualche livello
+    P.inv.Add(I_REPAIRKIT, 3); // acquistati da Gus
+    P.inv.Add(I_PARTS, 4);
+    DialogueStart(sh);
+    ChooseOption("Posso aiutare");
+    ChooseOption("Ci penso io");
+    Check(QUESTS[Q_WATER].stage == 10, "missione Acqua avviata");
+    Interact(InterIdx("pump"));
+    Check(FindInterByTag("pump")->used && QUESTS[Q_WATER].stage == 20, "pompa dell'acqua riparata");
+    DialogueStart(sh);
+    ChooseOption("La pompa dell'acqua funziona");
+    ChooseOption("Felice di aiutare");
+    Check(QUESTS[Q_WATER].done, "missione Acqua completata");
+    Snap(V3(2, TerrainHeight(2, -2) + 12.5f, -2), 22);
+    Check(HasPhoto("water_tower"), "foto della torre dell'acqua");
+
+    // --- Stazione Atomo: sacchi, esche, essere scacciati ---
     int tano = FindNpc("barman");
     DialogueStart(tano);
-    ChooseOption("lavoro");
+    ChooseOption("Hai qualche lavoro");
     ChooseOption("Affare fatto");
-    Check(QUESTS[Q_ROACH].stage == 10, "missione Infestazione avviata");
-    P.inv.Add(I_ASSAULT);
-    P.inv.Add(I_AMMO_556, 3000);
-    P.inv.Add(I_COMBAT);
-    EquipArmor(I_COMBAT);
-    EquipWeapon(I_ASSAULT);
-    for (int i = 0; i < SK_COUNT; i++) P.skillPts[i] = 60;
-    Teleport(ZONE_WASTE, 45, 165);
-    int k = AutoFight(90, 45);
-    printf("   uccisi alla stazione: %d\n", k);
+    Check(QUESTS[Q_ROACH].stage == 10, "missione Ospiti indesiderati avviata");
+    Teleport(ZONE_WASTE, 60, 150);
+    Entity* roach = FirstOfKind(EK_ROACH, ZONE_WASTE, V3(60, 0, 185), 30);
+    Check(roach != nullptr, "radscarafaggi alla stazione");
+    if (roach) {
+        int caught = P.timesCaught;
+        float hp = P.hp;
+        P.catchImmune = 0;
+        P.pos = roach->pos + V3(0.9f, 0, 0);
+        roach->aware = true;
+        roach->ai = AI_CHASE;
+        roach->lastSeen = P.pos;
+        for (int i = 0; i < 30 && P.timesCaught == caught; i++) SimTick(1.0f / 30);
+        Check(P.timesCaught == caught + 1 && G.fade > 0, "un radscarafaggio ti scaccia (nessun combattimento)");
+        Check(P.hp >= hp - 0.01f, "essere scacciati non ferisce");
+        FinishFade();
+        Check(DistXZ(P.pos, V3(60, 0, 180)) > 25, "riaccompagnato lontano dal territorio");
+        P.catchImmune = SAFE;
+        Teleport(ZONE_WASTE, 60, 150);
+        Sim(4);
+        Vector3 rp = roach->pos;
+        ThrowObject(ZONE_WASTE, rp + V3(2, 2, 0), V3(0, -2, 0), TOOL_BAIT);
+        Sim(1.5f);
+        Check(roach->ai == AI_DISTRACT, "l'esca distrae i radscarafaggi");
+        Check(Snap(EntityCenter(*roach), 14) || HasPhoto("roach"), "foto di un radscarafaggio");
+    }
+    for (auto& it : G.inters)
+        if (it.tag == "roach_sack" && !it.used) Interact((int)(&it - &G.inters[0]));
     Sim(1);
-    Check(QUESTS[Q_ROACH].stage == 20, "radscarafaggi eliminati");
+    Check(P.inv.Count(I_ROTFOOD) == 3 && QUESTS[Q_ROACH].stage == 20, "tre sacchi di cibo marcio portati via");
+    Check(G.flags["roaches_left"] == 1, "i radscarafaggi lasciano la stazione");
+    Snap(V3(46, TerrainHeight(46, 171) + 10.5f, 171), 26);
+    Check(HasPhoto("atom_sign"), "foto dell'insegna atomica");
     Teleport(ZONE_WASTE, 0, 30);
     DialogueStart(tano);
-    ChooseOption("ripulita");
-    ChooseOption("Grazie");
-    Check(QUESTS[Q_ROACH].done && P.inv.Count(I_SHOTGUN) > 0, "Infestazione completata, ricompensa ricevuta");
-    // Covo dei Teschi
-    Teleport(ZONE_WASTE, 190, -88);
-    k = AutoFight(240, 60);
-    printf("   uccisi al covo: %d (livello %d)\n", k, P.level);
-    Entity* boss = FindEntityByTag("boss");
-    Check(boss && boss->dead, "Teschio sconfitto");
-    if (boss) {
-        LootOpen(-1, (int)(boss - &G.ents[0]));
-        for (auto s : boss->inv.items) GiveItem(s.id, s.count, false);
-        boss->inv.Clear();
-        SetGameState(GS_PLAY);
-    }
-    Check(P.inv.Count(I_KEYCARD) == 1, "tessera d'accesso raccolta");
-    Check(QUESTS[Q_MAIN].stage == 45, "stadio 45: apri il cancello");
-    // cassaforte con la chiave
-    Interactable* safe = FindInterByTag("boss_safe");
-    if (safe) safe->keyItem = safe->keyItem;
-    // missione secondaria: medicine
-    Teleport(ZONE_WASTE, 0, 30);
-    int doc = FindNpc("doctor");
-    DialogueStart(doc);
-    ChooseOption("aiuto");
-    ChooseOption(TagFind("Baratto"));
-    if (G.state == GS_DIALOGUE) ChooseOption("ci vado");
-    if (G.state == GS_DIALOGUE) ChooseOption("Affare fatto");
-    Check(QUESTS[Q_MEDS].stage == 10, "missione Medicine avviata");
-    Teleport(ZONE_WASTE, 79, -165);
-    k = AutoFight(120, 45);
-    printf("   uccisi all'ospedale: %d\n", k);
-    Interactable* meds = FindInterByTag("meds");
-    if (meds) { meds->locked = false; Interact((int)(meds - &G.inters[0])); for (auto st : meds->inv.items) GiveItem(st.id, st.count, false); meds->inv.Clear(); SetGameState(GS_PLAY); }
-    Check(QUESTS[Q_MEDS].stage == 20, "rifornimenti medici trovati");
-    Teleport(ZONE_WASTE, 0, 30);
-    DialogueStart(doc);
-    ChooseOption("rifornimenti");
-    ChooseOption("Felice");
-    Check(QUESTS[Q_MEDS].done, "missione Medicine completata");
-    // missione secondaria: la bestia
-    int hunter = FindNpc("hunter");
-    DialogueStart(hunter);
-    ChooseOption("Che guaio");
+    ChooseOption("I radscarafaggi hanno lasciato");
+    ChooseOption("Grazie, Tano");
+    Check(QUESTS[Q_ROACH].done && P.inv.Count(I_STEALTHBOY) > 0 && P.inv.Count(I_ROTFOOD) == 0, "Ospiti indesiderati completata");
+
+    // --- Il cane di Rita ---
+    int rita = FindNpc("rita");
+    DialogueStart(rita);
+    ChooseOption("Lo cercherò io");
+    ChooseOption("Lo riporterò a casa");
+    Check(QUESTS[Q_DOG].stage == 10, "missione Il cane di Rita avviata");
+    Teleport(ZONE_WASTE, -140, 160);
+    Sim(1);
+    Check(W.locations[2].discovered || DistXZ(P.pos, V3(-120, 0, 170)) < 40, "Fattoria Abbandonata raggiunta");
+    Entity* mole = FirstOfKind(EK_MOLERAT, ZONE_WASTE, V3(-100, 0, 185), 40);
+    if (mole) Snap(EntityCenter(*mole), 16);
+    Check(HasPhoto("molerat"), "foto di un ratto talpa");
+    Snap(V3(-142, TerrainHeight(-142, 162) + 11, 162), 30);
+    Check(HasPhoto("silo"), "foto del silo");
+    P.inv.Add(I_MEAT, 2);
+    int dog = FindNpc("ruggine");
+    DialogueStart(dog);
+    ChooseOption("Offri una striscia");
+    ChooseOption("Andiamo a casa");
+    Check(G.ents[dog].companion && QUESTS[Q_DOG].stage == 20, "Ruggine diventa tuo amico e ti segue");
+    Interact(InterIdx("generator"));
+    Check(G.flags["farm_power"] == 1, "generatore della fattoria riparato");
+    Teleport(ZONE_WASTE, -7, 44);
+    Sim(1.5f);
+    Check(QUESTS[Q_DOG].stage == 30, "Ruggine riportato da Rita");
+    Snap(EntityCenter(G.ents[dog]), 5);
+    Check(HasPhoto("ruggine"), "foto di Ruggine");
+    DialogueStart(rita);
+    ChooseOption("Era nel fienile");
+    ChooseOption("Grazie, Rita");
+    Check(QUESTS[Q_DOG].done && G.ents[dog].companion, "Il cane di Rita completata, Ruggine resta con te");
+
+    // --- Jack Falco: catalogo e bestia ---
+    int jack = FindNpc("naturalist");
+    DialogueStart(jack);
+    ChooseOption("Posso aiutarti");
     ChooseOption("Lo farò");
-    Check(QUESTS[Q_BEAST].stage == 10, "missione Bestia avviata");
-    P.inv.Add(I_AMMO_556, 1000);
-    Teleport(ZONE_WASTE, -240, -250);
-    k = AutoFight(200, 80);
-    Entity* beast = FindEntityByTag("beast");
-    Check(beast && beast->dead, "Squarciatore ucciso");
-    Check(QUESTS[Q_BEAST].stage == 20, "stadio 20: recupera l'artiglio");
-    if (beast) { for (auto st : beast->inv.items) GiveItem(st.id, st.count, false); beast->inv.Clear(); }
-    Teleport(ZONE_WASTE, 0, 30);
-    DialogueStart(hunter);
-    ChooseOption("artiglio");
     ChooseOption("Grazie, Jack");
-    Check(QUESTS[Q_BEAST].done, "missione Bestia completata");
-    // missione secondaria: il segnale
+    ChooseOption("bestia leggendaria");
+    ChooseOption("Lo fotograferò io");
+    ChooseOption("Ci vado");
+    Check(QUESTS[Q_PHOTO].stage >= 10 && QUESTS[Q_BEAST].stage == 10, "missioni di Jack avviate");
+    Teleport(ZONE_WASTE, -250, -255);
+    Sim(1);
+    Entity* beast = FindEntityByTag("beast");
+    P.crouch = true;
+    P.catchImmune = 0;
+    Sim(0.5f);
+    if (beast) Snap(EntityCenter(*beast), 13);
+    Sim(0.5f);
+    Check(HasPhoto("deathclaw") && QUESTS[Q_BEAST].stage == 20, "foto dello Squarciatore");
+    Check(beast && beast->asleep, "lo Squarciatore continua a dormire");
+    P.catchImmune = SAFE;
+    LootAll(InterIdx("jack_pack"));
+    Check(P.inv.Count(I_JOURNAL) == 1, "diario di Jack recuperato");
+    P.crouch = false;
+    Teleport(ZONE_WASTE, -258, 248 - 20);
+    Snap(V3(-240, TerrainHeight(-240, 248) + 4, 248), 20);
+    Check(HasPhoto("vault_door"), "foto della porta del Rifugio");
+
+    // --- Segnale nel deserto ---
     SetRadioStation(2);
     Sim(8);
     Check(QUESTS[Q_SIGNAL].stage == 10, "segnale radio captato");
     SetRadioStation(0);
-    Teleport(ZONE_WASTE, -260, -5);
-    AutoFight(60, 40);
-    Interactable* scout = FindInterByTag("scout");
-    if (scout) { LootOpen((int)(scout - &G.inters[0]), -1); for (auto st : scout->inv.items) GiveItem(st.id, st.count, false); scout->inv.Clear(); SetGameState(GS_PLAY); }
-    Check(QUESTS[Q_SIGNAL].stage == 20 && P.inv.Count(I_CACHEKEY) == 1, "chiave del deposito trovata");
-    Interactable* cache = FindInterByTag("cache");
+    Teleport(ZONE_WASTE, -271.5f, -4.5f);
+    Sim(0.5f);
+    Entity* wild = FirstOfKind(EK_DOG, ZONE_WASTE, V3(-294, 0, -10), 30);
+    if (wild && !wild->companion) Snap(EntityCenter(*wild), 15);
+    Check(HasPhoto("dog"), "foto di un cane selvatico");
+    int vera = FindNpc("scout");
+    DialogueStart(vera);
+    ChooseOption("Come posso aiutarti");
+    ChooseOption("Ci penso io");
+    Check(QUESTS[Q_SIGNAL].stage == 20, "Vera trovata: ripara il trasmettitore");
+    float g0 = TerrainHeight(-280, -10);
+    Interact(InterIdx("tower_up"));
+    Check(P.pos.y > g0 + 14, "salito sulla Torre Radio con la scala");
+    Interact(InterIdx("transmitter"));
+    Check(QUESTS[Q_SIGNAL].stage == 30, "trasmettitore riparato");
+    Interact(InterIdx("tower_down"));
+    Check(P.pos.y < g0 + 3, "sceso dalla torre");
+    Interact(InterIdx("record"));
+    Check(P.inv.Count(I_RECORD) == 1, "disco d'anteguerra raccolto");
+    DialogueStart(vera);
+    ChooseOption("Sono contento");
+    ChooseOption("Grazie, Vera");
+    Check(QUESTS[Q_SIGNAL].stage == 40 && P.inv.Count(I_CACHEKEY) == 1, "chiave del baule ricevuta");
     Teleport(ZONE_WASTE, -128, -145);
-    if (cache) Interact((int)(cache - &G.inters[0]));
-    Check(cache && !cache->locked && QUESTS[Q_SIGNAL].done, "deposito aperto, missione Segnale completata");
+    Interact(InterIdx("cache"));
     SetGameState(GS_PLAY);
+    Check(!FindInterByTag("cache")->locked && QUESTS[Q_SIGNAL].done, "baule aperto, Segnale nel deserto completata");
+    Entity* ghoul = FirstOfKind(EK_GHOUL, ZONE_WASTE, V3(-170, 0, -120), 40);
+    if (ghoul) Snap(EntityCenter(*ghoul), 16);
     P.rads = 0;
-    // Base Delta-9
+
+    // --- Medicine (ospedale delle rovine) ---
+    Teleport(ZONE_WASTE, 0, 30);
+    int doc = FindNpc("doctor");
+    DialogueStart(doc);
+    ChooseOption("Hai bisogno di aiuto");
+    ChooseOption("Ci penso io");
+    Check(QUESTS[Q_MEDS].stage == 10, "missione Medicine avviata");
+    Teleport(ZONE_WASTE, 79, -165);
+    LootAll(InterIdx("meds"));
+    Check(QUESTS[Q_MEDS].stage == 20, "rifornimenti medici trovati");
+    Entity* mut = FirstOfKind(EK_MUTANT, ZONE_WASTE, V3(62, 0, -234), 30);
+    if (mut) Snap(EntityCenter(*mut), 18);
+    Teleport(ZONE_WASTE, 0, 30);
+    DialogueStart(doc);
+    ChooseOption("Ho trovato i rifornimenti");
+    ChooseOption("Felice di aiutare");
+    Check(QUESTS[Q_MEDS].done, "missione Medicine completata");
+
+    // --- Jack: consegne ---
+    printf("   foto nel catalogo: %d\n", (int)P.photos.size());
+    Check(QUESTS[Q_PHOTO].stage == 20, "otto fotografie per il catalogo");
+    DialogueStart(jack);
+    ChooseOption("Ho fotografato lo Squarciatore");
+    ChooseOption("Grazie, Jack");
+    ChooseOption("Ho le foto");
+    ChooseOption("Grazie!");
+    ChooseOption("Ho trovato il tuo diario");
+    ChooseOption("piacere");
+    SetGameState(GS_PLAY);
+    Check(QUESTS[Q_BEAST].done && QUESTS[Q_PHOTO].done && P.inv.Count(I_DARKCLOAK) == 1 && P.inv.Count(I_JOURNAL) == 0, "La bestia della gola e Il catalogo di Jack completate");
+
+    // --- Covo dei Teschi ---
+    Teleport(ZONE_WASTE, 194, -88);
+    Sim(0.5f);
+    Entity* raider = nullptr;
+    for (auto& e : G.ents)
+        if (e.fac == FAC_RAIDER && e.hostile && e.tag.empty() && DistXZ(e.pos, V3(230, 0, -90)) < 30) { raider = &e; break; }
+    Check(raider != nullptr, "i Teschi sorvegliano il covo");
+    if (raider) {
+        ThrowObject(ZONE_WASTE, raider->pos + V3(3, 2, 0), V3(0, -2, 0), TOOL_NOISE);
+        Sim(1.5f);
+        Check(raider->ai == AI_SEARCH, "un barattolo rumoroso attira un predone");
+    }
+    int bruto = FindNpc("raider_guard");
+    DialogueStart(bruto);
+    ChooseOption("Paga 50");
+    ChooseOption("Grazie.");
+    Sim(1);
+    Check(G.flags["raider_pass"] && raider && !raider->hostile, "lasciapassare di Bruto: i Teschi ti lasciano in pace");
+    int boss = FindNpc("boss");
+    Check(boss >= 0 && !G.ents[boss].hostile, "Teschio disponibile a parlare");
+    DialogueStart(boss);
+    ChooseOption("Mi serve la tessera");
+    ChooseOption("Ho un disco");
+    ChooseOption("Buon ascolto");
+    Check(P.inv.Count(I_KEYCARD) == 1 && QUESTS[Q_MAIN].stage == 45 && G.flags["boss_deal"] == 3, "tessera ottenuta in cambio del disco");
+    Check(FindInterByTag("boss_safe")->inv.Count(I_KEYCARD) == 0, "la tessera non è più in cassaforte");
+
+    // --- Base Delta-9 ---
     Teleport(ZONE_WASTE, 190, 220);
     Interactable* gate = FindInterByTag("base_gate");
-    Interact((int)(gate - &G.inters[0]));
+    Interact(InterIdx("base_gate"));
     Check(gate->open, "cancello aperto con la tessera");
     Check(QUESTS[Q_MAIN].stage == 50, "stadio 50: entra nei laboratori");
     Sim(2);
-    k = AutoFight(120, 70);
-    printf("   uccisi alla base: %d\n", k);
+    Snap(V3(200, TerrainHeight(200, 220) + 3, 220), 24);
+    Entity* cam = FirstOfKind(EK_CAMERA, ZONE_WASTE, V3(270, 0, 220), 30);
+    if (cam) {
+        P.catchImmune = 0;
+        P.crouch = false;
+        Vector3 cp = cam->pos + YawDir(cam->yaw) * 8;
+        Teleport(ZONE_WASTE, cp.x, cp.z);
+        P.catchImmune = 0;
+        for (int i = 0; i < 120 && !cam->aware; i++) SimTick(1.0f / 30);
+        Check(cam->aware, "la telecamera ti vede e dà l'allarme");
+        Snap(EntityCenter(*cam), 6);
+        P.catchImmune = SAFE;
+        Sim(6);
+    }
+    Entity* robot = FirstOfKind(EK_ROBOT, ZONE_WASTE, V3(250, 0, 220), 60);
+    if (robot) {
+        Snap(EntityCenter(*robot), 12);
+        int caught = P.timesCaught;
+        P.catchImmune = 0;
+        Vector3 rp = robot->pos + YawDir(robot->yaw) * 5;
+        P.pos = V3(rp.x, GroundHeight(ZONE_WASTE, V3(rp.x, robot->pos.y + 1, rp.z), 1.0f), rp.z);
+        for (int i = 0; i < 600 && P.timesCaught == caught; i++) SimTick(1.0f / 30);
+        Check(P.timesCaught > caught, "una sentinella ti scorta fuori dalla base");
+        FinishFade();
+        Check(DistXZ(P.pos, V3(185, 0, 222)) < 6, "riaccompagnato al cancello");
+        P.catchImmune = SAFE;
+    }
+    Interactable* secOut = FindInterByTag("sec_term_out");
+    if (secOut) TerminalAction("security_off", *secOut);
+    int on = 0;
+    for (auto& e : G.ents)
+        if (e.zone == ZONE_WASTE && (e.kind == EK_ROBOT || e.kind == EK_CAMERA) && !e.off) on++;
+    Check(on == 0, "sorveglianza esterna disattivata dal terminale");
     Teleport(ZONE_BASE, 0, -2);
     Check(QUESTS[Q_MAIN].stage == 55, "stadio 55: trova la cella");
-    k = AutoFight(300, 120);
-    printf("   uccisi nei laboratori: %d\n", k);
+    Interactable* secIn = FindInterByTag("sec_term_in");
+    if (secIn) {
+        TerminalAction("security_off", *secIn);
+        TerminalAction("unlock_storage", *secIn);
+    }
     Entity* mk5 = FindEntityByTag("mk5");
-    Check(mk5 && mk5->dead, "Sentinella Mk.V distrutta");
-    Interactable* cell = FindInterByTag("fusion_cell");
-    Interact((int)(cell - &G.inters[0]));
+    on = 0;
+    for (auto& e : G.ents)
+        if (e.zone == ZONE_BASE && (e.kind == EK_ROBOT || e.kind == EK_CAMERA) && !e.off && e.tag != "mk5") on++;
+    Check(on == 0 && mk5 && !mk5->off, "sorveglianza interna spenta, la Mk.V resta attiva");
+    if (mk5) Snap(EntityCenter(*mk5), 9);
+    LootAll(InterIdx("maint_locker"));
+    Check(P.inv.Count(I_MAINTCODE) == 1, "codice di manutenzione trovato");
+    int lab = InterIdx("lab_term");
+    TerminalStart(lab);
+    Check(G.state == GS_TERMINAL && G.inters[lab].hacked, "il codice apre il terminale del laboratorio");
+    TerminalAction("mk5_off", G.inters[lab]);
+    SetGameState(GS_PLAY);
+    Check(mk5 && mk5->off, "Sentinella Mk.V in manutenzione");
+    Interact(InterIdx("fusion_cell"));
     Check(P.inv.Count(I_FUSIONCELL) == 1 && QUESTS[Q_MAIN].stage == 60, "cella di fusione recuperata (stadio 60)");
-    // armeria: porta bloccata
-    Interactable* arm = FindInterByTag("armory_door");
-    Check(arm && arm->locked, "porta dell'armeria bloccata");
-    // salvataggio e caricamento
+    Interactable* store = FindInterByTag("storage_door");
+    Check(store && !store->locked, "il terminale ha sbloccato il magazzino");
+
+    // --- salvataggio e caricamento ---
     Check(SaveGame(5), "salvataggio slot 5");
-    int xp = P.xp, kills = P.kills, lvl = P.level;
+    int xp = P.xp, lvl = P.level, photos = (int)P.photos.size(), caught = P.timesCaught;
     float px = P.pos.x;
     Check(LoadGame(5), "caricamento slot 5");
-    Check(G.player.xp == xp && G.player.kills == kills && G.player.level == lvl && fabsf(G.player.pos.x - px) < 0.01f, "dati del giocatore conservati");
-    Check(FindEntityByTag("boss")->dead && FindInterByTag("base_gate")->open && FindInterByTag("fusion_cell")->used, "stato del mondo conservato");
-    Check(QUESTS[Q_MAIN].stage == 60 && QUESTS[Q_ROACH].done, "missioni conservate");
-    // ritorno al Rifugio e finale
+    Check(G.player.xp == xp && G.player.level == lvl && (int)G.player.photos.size() == photos && G.player.timesCaught == caught && fabsf(G.player.pos.x - px) < 0.01f, "dati del giocatore conservati");
+    Check(FindInterByTag("base_gate")->open && FindInterByTag("fusion_cell")->used && FindEntityByTag("mk5")->off, "stato del mondo conservato");
+    Check(FindEntityByTag("ruggine")->companion && G.flags["raider_pass"], "compagno e lasciapassare conservati");
+    Check(QUESTS[Q_MAIN].stage == 60 && QUESTS[Q_ROACH].done && QUESTS[Q_DOG].done, "missioni conservate");
+
+    // --- svenimento: ci si risveglia in clinica ---
+    int caps = P.inv.Count(I_CAPS);
+    P.hp = 1;
+    PlayerHurt(10, false);
+    Check(G.state == GS_FAINT, "svenimento quando i PF finiscono");
+    FaintWakeUp();
+    FinishFade();
+    Check(G.state == GS_PLAY && P.zone == ZONE_WASTE && DistXZ(P.pos, V3(22, 0, 38)) < 8, "risveglio nella clinica di Ferrocittà");
+    Check(P.inv.Count(I_CAPS) == caps - caps / 10 && P.inv.Count(I_FUSIONCELL) == 1, "onorario pagato, la cella è ancora con te");
+
+    // --- ritorno al Rifugio e finale ---
     Teleport(ZONE_VAULT, -16, 8);
-    Interactable* reactor = FindInterByTag("reactor");
-    Interact((int)(reactor - &G.inters[0]));
+    Interact(InterIdx("reactor"));
     Check(QUESTS[Q_MAIN].done && G.state == GS_ENDING, "reattore riparato, finale avviato");
     for (int i = 0; i < 8; i++) DrawFrame();
-    // tutte le schermate
     G.state = GS_PLAY;
     DrawAllScreens();
     Check(true, "tutte le schermate disegnate senza errori");
-    // statistiche finali
-    printf("   livello %d, PE %d, uccisioni %d, karma %d, tappi %d\n", P.level, P.xp, P.kills, P.karma, P.inv.Count(I_CAPS));
+    int done = 0;
+    for (auto& q : QUESTS) done += q.done;
+    Check(done == Q_COUNT, "tutte le 8 missioni completate");
+    printf("   livello %d, PE %d, foto %d, volte scoperto %d, karma %d, tappi %d\n", P.level, P.xp, (int)P.photos.size(), P.timesCaught, P.karma, P.inv.Count(I_CAPS));
     printf("=== %s (%d errori) ===\n", sFail ? "FALLITO" : "SUPERATO", sFail);
     return sFail ? 1 : 0;
 }
@@ -665,16 +861,12 @@ int main(int argc, char** argv) {
         NewGame();
         if (!test.give.empty()) {
             // es. "--give all": equipaggiamento completo per i test
-            int items[] = {I_PISTOL, I_ASSAULT, I_LASERRIFLE, I_HUNTRIFLE, I_SHOTGUN, I_PLASMA, I_MINIGUN, I_SLEDGE};
-            for (int it : items) G.player.inv.Add(it);
-            int ammo[] = {I_AMMO_10, I_AMMO_556, I_AMMO_CELL, I_AMMO_308, I_AMMO_SHELL, I_AMMO_MFC, I_AMMO_5MM};
-            for (int a : ammo) G.player.inv.Add(a, 200);
-            G.player.inv.Add(I_STIMPAK, 10);
-            G.player.inv.Add(I_GRENADE, 5);
-            G.player.inv.Add(I_CAPS, 500);
-            EquipWeapon(I_ASSAULT);
+            int items[][2] = {{I_CAMERA, 1}, {I_BAIT, 10}, {I_NOISE, 10}, {I_MEDKIT, 10}, {I_STEALTHBOY, 2}, {I_REPAIRKIT, 3}, {I_PARTS, 5}, {I_CAPS, 500}, {I_MEAT, 3}, {I_DARKCLOAK, 1}};
+            for (auto& it : items) G.player.inv.Add(it[0], it[1]);
+            EquipTool(TOOL_CAMERA);
             QUESTS[Q_MAIN].stage = 40;
             QUESTS[Q_ROACH].stage = 10;
+            QUESTS[Q_PHOTO].stage = 10;
             for (auto& l : W.locations) l.discovered = true;
         }
         if (test.zone >= 0) {
@@ -687,7 +879,7 @@ int main(int argc, char** argv) {
         G.messages.clear();
         G.bigMsgT = 0;
         if (test.state >= 0) {
-            if (test.state == GS_VATS) VatsEnter();
+            if (test.state == GS_SCAN) ScanEnter();
             else if (test.state == GS_DIALOGUE) {
                 for (int i = 0; i < (int)G.ents.size(); i++)
                     if (G.ents[i].zone == G.player.zone && !G.ents[i].dlg.empty() && Vector3Distance(G.ents[i].pos, G.player.pos) < 8) { DialogueStart(i); break; }

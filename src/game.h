@@ -131,48 +131,24 @@ void DrawBeam(Vector3 a, Vector3 b, float radius, Color c);
 //  Oggetti e inventario
 // ============================================================================
 enum Special { ST_STR, ST_PER, ST_END, ST_CHA, ST_INT, ST_AGI, ST_LCK, ST_COUNT };
-enum Skill { SK_SMALLGUNS, SK_ENERGY, SK_MELEE, SK_EXPLOSIVES, SK_MEDICINE, SK_LOCKPICK, SK_SCIENCE, SK_BARTER, SK_SPEECH, SK_SNEAK, SK_COUNT };
+enum Skill { SK_ATHLETICS, SK_REPAIR, SK_SURVIVAL, SK_NATURE, SK_MEDICINE, SK_LOCKPICK, SK_SCIENCE, SK_BARTER, SK_SPEECH, SK_SNEAK, SK_COUNT };
 extern const char* SPECIAL_NAMES[ST_COUNT];
 extern const char* SPECIAL_DESC[ST_COUNT];
 extern const char* SKILL_NAMES[SK_COUNT];
 extern const char* SKILL_DESC[SK_COUNT];
 extern const int SKILL_GOV[SK_COUNT];
 
-enum ItemType { IT_WEAPON, IT_ARMOR, IT_AID, IT_AMMO, IT_MISC, IT_KEY };
-
-enum WeaponModel { WM_FIST, WM_KNIFE, WM_PIPE, WM_BAT, WM_SLEDGE, WM_PISTOL, WM_RIFLE, WM_SHOTGUN, WM_ASSAULT,
-                   WM_LASERPISTOL, WM_LASERRIFLE, WM_PLASMA, WM_MINIGUN, WM_GRENADE };
+enum ItemType { IT_TOOL, IT_ARMOR, IT_AID, IT_MISC, IT_KEY };
+enum Tool { TOOL_HANDS, TOOL_CAMERA, TOOL_BAIT, TOOL_NOISE, TOOL_COUNT };
 
 enum SfxId {
-    SFX_PISTOL, SFX_RIFLE, SFX_SHOTGUN, SFX_AUTO, SFX_LASER, SFX_PLASMA, SFX_MINIGUN, SFX_SWING, SFX_PUNCH,
-    SFX_HIT, SFX_IMPACT, SFX_METALHIT, SFX_STEP1, SFX_STEP2, SFX_STEP3, SFX_STEP4, SFX_GEIGER, SFX_PICKUP,
-    SFX_UI_MOVE, SFX_UI_OK, SFX_UI_BACK, SFX_LEVELUP, SFX_QUEST, SFX_EXPLOSION, SFX_RELOAD, SFX_EMPTY,
-    SFX_ROACH, SFX_GROWL, SFX_GHOUL, SFX_ROBOT, SFX_ROAR, SFX_MUTANT, SFX_DOG, SFX_DOOR, SFX_VAULTDOOR,
-    SFX_PIN_TURN, SFX_PIN_BREAK, SFX_UNLOCK, SFX_TYPE, SFX_TERM_OK, SFX_TERM_FAIL, SFX_VATS_IN, SFX_VATS_OUT,
-    SFX_HURT, SFX_DEATH, SFX_STIM, SFX_EAT, SFX_JUMP, SFX_LAND, SFX_THROW, SFX_BOUNCE, SFX_SPARK,
+    SFX_SHUTTER, SFX_ALARM, SFX_CAUGHT, SFX_RATTLE, SFX_STEALTH, SFX_REPAIR, SFX_CLIMB, SFX_SWING, SFX_SNIFF,
+    SFX_IMPACT, SFX_METALHIT, SFX_STEP1, SFX_STEP2, SFX_STEP3, SFX_STEP4, SFX_GEIGER, SFX_PICKUP,
+    SFX_UI_MOVE, SFX_UI_OK, SFX_UI_BACK, SFX_LEVELUP, SFX_QUEST, SFX_DISCOVER,
+    SFX_ROACH, SFX_GROWL, SFX_GHOUL, SFX_ROBOT, SFX_ROAR, SFX_MUTANT, SFX_DOG, SFX_BARK, SFX_DOOR, SFX_VAULTDOOR,
+    SFX_PIN_TURN, SFX_PIN_BREAK, SFX_UNLOCK, SFX_TYPE, SFX_TERM_OK, SFX_TERM_FAIL, SFX_SCAN_IN, SFX_SCAN_OUT,
+    SFX_HURT, SFX_FAINT, SFX_STIM, SFX_EAT, SFX_JUMP, SFX_LAND, SFX_BOUNCE, SFX_SPARK, SFX_SNORE,
     SFX_COUNT
-};
-
-struct WeaponDef {
-    WeaponModel model;
-    Skill skill;
-    int ammo;          // id oggetto munizioni, -1 = nessuna
-    int mag;
-    float damage;
-    float fireDelay;   // secondi tra un colpo e l'altro
-    float spread;      // gradi
-    int pellets;
-    float range;
-    float reload;
-    int apCost;
-    bool automatic;
-    bool melee;
-    bool energy;
-    bool twoHanded;
-    SfxId sfx;
-    Color beam;        // colore raggio (armi a energia)
-    float zoom;        // fattore zoom mirando
-    float recoil;      // gradi
 };
 
 struct ItemDef {
@@ -181,30 +157,28 @@ struct ItemDef {
     float weight;
     int value;
     const char* desc;
-    int weapon = -1;   // indice in WEAPONS
-    float dr = 0, radRes = 0;
-    int look = 0;      // aspetto armatura
-    float heal = 0, rads = 0, radX = 0, ap = 0;
+    int tool = -1;      // attrezzo (Tool)
+    float radRes = 0;   // abbigliamento
+    int sneak = 0, carry = 0, talk = 0;
+    int look = 0;       // aspetto dell'abbigliamento
+    float heal = 0, rads = 0, radX = 0, ap = 0, stealth = 0;
 };
 
 enum ItemId {
     I_CAPS,
-    // armi
-    I_KNIFE, I_PIPE, I_BAT, I_SLEDGE, I_PISTOL, I_HUNTRIFLE, I_SHOTGUN, I_ASSAULT, I_LASERPISTOL, I_LASERRIFLE, I_PLASMA, I_MINIGUN, I_GRENADE,
-    // munizioni
-    I_AMMO_10, I_AMMO_308, I_AMMO_SHELL, I_AMMO_556, I_AMMO_CELL, I_AMMO_MFC, I_AMMO_5MM,
-    // armature
-    I_VAULTSUIT, I_LEATHER, I_RAIDER, I_METAL, I_COMBAT, I_RADSUIT, I_POWER, I_COAT,
+    // attrezzi
+    I_CAMERA, I_BAIT, I_NOISE,
+    // abbigliamento
+    I_VAULTSUIT, I_JACKET, I_DARKCLOAK, I_RADSUIT, I_EXOSUIT, I_COAT,
     // aiuti
-    I_STIMPAK, I_RADAWAY, I_RADX, I_COLA, I_WATER, I_PUREWATER, I_MEAT, I_BEANS, I_CRAM, I_JET, I_MENTATS,
+    I_MEDKIT, I_RADAWAY, I_RADX, I_STEALTHBOY, I_COLA, I_WATER, I_PUREWATER, I_MEAT, I_BEANS, I_CRAM, I_COFFEE, I_HERBTEA,
     // varie
-    I_BOBBYPIN, I_SCRAP, I_TINCAN, I_TOASTER, I_TEDDY, I_CLOCK, I_BOTTLE, I_FUSE, I_CIRCUIT,
+    I_BOBBYPIN, I_REPAIRKIT, I_PARTS, I_SCRAP, I_TINCAN, I_TOASTER, I_TEDDY, I_CLOCK, I_BOTTLE, I_FUSE, I_CIRCUIT, I_COMIC,
     // missione / chiavi
-    I_MEDSUPPLIES, I_KEYCARD, I_FUSIONCELL, I_CLAW, I_CACHEKEY, I_SCOUTNOTE, I_SAFEKEY,
+    I_MEDSUPPLIES, I_KEYCARD, I_FUSIONCELL, I_JOURNAL, I_CACHEKEY, I_SCOUTNOTE, I_SAFEKEY, I_RECORD, I_ROTFOOD, I_MAINTCODE,
     I_COUNT
 };
 
-extern WeaponDef WEAPONS[];
 extern ItemDef ITEMS[I_COUNT];
 void ItemsInit();
 
@@ -218,6 +192,12 @@ struct Inventory {
     bool Empty() const { return items.empty(); }
     void Clear() { items.clear(); }
 };
+
+// soggetti fotografabili (catalogo delle Terre Bruciate)
+struct PhotoSubject { const char* key; const char* name; const char* desc; int xp; int zone; Vector3 pos; bool landmark; };
+extern std::vector<PhotoSubject> PHOTO_SUBJECTS;
+void InitPhotoSubjects();
+int PhotoIndex(const std::string& key);
 
 // ============================================================================
 //  Mondo
@@ -328,7 +308,7 @@ int NearestLocation(Vector3 p, float* dist);
 // ============================================================================
 //  Oggetti interattivi (contenitori, porte, terminali...)
 // ============================================================================
-enum InterType { INT_CONTAINER, INT_DOOR, INT_TRANSITION, INT_TERMINAL, INT_BED, INT_ITEM, INT_REACTOR, INT_VAULTDOOR, INT_GATE };
+enum InterType { INT_CONTAINER, INT_DOOR, INT_TRANSITION, INT_TERMINAL, INT_BED, INT_ITEM, INT_REACTOR, INT_VAULTDOOR, INT_GATE, INT_LADDER, INT_REPAIR };
 enum ContModel { CM_CRATE, CM_AMMOBOX, CM_FIRSTAID, CM_FRIDGE, CM_DESK, CM_LOCKER, CM_SAFE, CM_FOOTLOCKER, CM_TOOLBOX, CM_TRASH, CM_NONE };
 
 struct Interactable {
@@ -356,15 +336,17 @@ struct Interactable {
     bool lockedOut = false;
     bool used = false;    // oggetti a terra raccolti, ecc.
     bool discovered = true;
+    int skillReq = 0;     // riparazioni: abilità Riparazione richiesta
+    int partsReq = 0;     // riparazioni: componenti richiesti
 };
 
 // ============================================================================
 //  Entità (PNG e creature)
 // ============================================================================
-enum EntKind { EK_HUMAN, EK_ROACH, EK_MOLERAT, EK_DOG, EK_GHOUL, EK_MUTANT, EK_ROBOT, EK_TURRET, EK_DEATHCLAW, EK_COUNT };
+enum EntKind { EK_HUMAN, EK_ROACH, EK_MOLERAT, EK_DOG, EK_GHOUL, EK_MUTANT, EK_ROBOT, EK_CAMERA, EK_DEATHCLAW, EK_COUNT };
 enum Faction { FAC_TOWN, FAC_VAULT, FAC_RAIDER, FAC_CREATURE, FAC_MUTANT, FAC_ROBOT };
-enum Outfit { OF_SETTLER, OF_VAULT, OF_RAIDER, OF_SHERIFF, OF_DOCTOR, OF_GUARD, OF_TRADER, OF_GHOUL, OF_MUTANT, OF_LEATHER, OF_COMBAT, OF_POWER, OF_RADSUIT, OF_BARMAN };
-enum AiState { AI_IDLE, AI_WANDER, AI_COMBAT, AI_FLEE, AI_SEARCH, AI_RETURN };
+enum Outfit { OF_SETTLER, OF_VAULT, OF_RAIDER, OF_SHERIFF, OF_DOCTOR, OF_GUARD, OF_TRADER, OF_GHOUL, OF_MUTANT, OF_LEATHER, OF_COMBAT, OF_POWER, OF_RADSUIT, OF_BARMAN, OF_DARK };
+enum AiState { AI_IDLE, AI_CHASE, AI_SEARCH, AI_DISTRACT, AI_RETURN, AI_FOLLOW };
 
 struct Look {
     Color skin = Col(205, 160, 130);
@@ -372,11 +354,12 @@ struct Look {
     Color pants = Col(80, 70, 60);
     Color hair = Col(60, 45, 35);
     int hairStyle = 1;  // 0 calvo, 1 corti, 2 lunghi, 3 cresta
-    int hat = 0;        // 0 nessuno, 1 cappello, 2 elmetto, 3 bandana, 4 casco atomico
+    int hat = 0;        // 0 nessuno, 1 cappello, 2 elmetto, 3 bandana
     int outfit = OF_SETTLER;
     bool female = false;
 };
 
+// Le creature e i guardiani non feriscono mai: se ti raggiungono, ti scacciano dal loro territorio.
 struct Entity {
     int id = 0;
     EntKind kind = EK_HUMAN;
@@ -384,49 +367,42 @@ struct Entity {
     std::string name;
     std::string tag;
     std::string dlg;
+    std::string photoKey;     // soggetto per il catalogo fotografico
     Faction fac = FAC_TOWN;
-    bool hostile = false;
+    bool hostile = false;     // territoriale: insegue e scaccia il giocatore
     bool essential = false;
     Vector3 pos{}, home{}, vel{};
     float yaw = 0;
-    float hp = 50, maxHp = 50, dr = 0;
     float speed = 3.5f;
     float scale = 1.0f;
-    int weapon = -1;          // oggetto arma (umanoidi)
-    float meleeDmg = 5;
-    float accuracy = 0.6f;
-    float detect = 25;
+    float detect = 25;        // distanza di avvistamento
     float wanderRadius = 8;
-    int xp = 10;
+    float territory = 30;     // oltre questa distanza da casa smette di inseguire
     int vendor = -1;          // indice negozio
     bool glow = false;
     float radAura = 0;
+    bool animal = false;      // attirato dalle esche
     // stato IA
     AiState ai = AI_IDLE;
     float aiTimer = 0;
     float alert = 0;
     bool aware = false;
+    bool asleep = false;
+    bool off = false;         // robot spento
+    bool companion = false;   // segue il giocatore
     Vector3 moveTarget{};
     Vector3 lastSeen{};
-    float attackCd = 0;
-    float attackAnim = 0;
-    bool attackHit = false;
+    Vector3 distractPos{};
+    float distractT = 0;
     float losTimer = 0;
     bool los = false;
     float strafe = 1;
-    float strafeTimer = 0;
-    int mag = 0;
-    float reloadT = 0;
-    float burst = 0;
     float voiceCd = 0;
+    float scanBase = 0;       // telecamere: direzione centrale
+    float lostT = 0;
     // animazione
-    float anim = 0, moveAmt = 0, hitFlash = 0, deathT = 0, aimBlend = 0;
-    bool dead = false;
-    float cripple = 0;
-    float stateFlee = 0;
+    float anim = 0, moveAmt = 0, hitFlash = 0, aimBlend = 0, actionAnim = 0;
     float detourT = 0, detourYaw = 0;
-    float talkT = 0;
-    Inventory inv;
     Look look;
     std::vector<Vector3> patrol;
     int patrolIdx = 0;
@@ -436,9 +412,9 @@ struct Entity {
 //  Giocatore
 // ============================================================================
 enum Perk {
-    PK_TOUGHNESS, PK_GUNSLINGER, PK_COMMANDO, PK_IRONFIST, PK_MEDIC, PK_LEADBELLY, PK_RADRES, PK_EDUCATED,
-    PK_STRONGBACK, PK_ACTIONBOY, PK_SNIPER, PK_FINESSE, PK_BLOODYMESS, PK_FORTUNE, PK_LASER, PK_FASTRELOAD,
-    PK_LIFEGIVER, PK_NINJA, PK_REGEN, PK_INFILTRATOR, PK_HACKER, PK_DEMOLITION, PK_COUNT
+    PK_SOFTSTEP, PK_ANIMALFRIEND, PK_EXPLORER, PK_PHOTOGRAPHER, PK_MEDIC, PK_LEADBELLY, PK_RADRES, PK_EDUCATED,
+    PK_STRONGBACK, PK_ACTIONBOY, PK_SHADOW, PK_FORTUNE, PK_THROWER, PK_MECHANIC, PK_LIFEGIVER, PK_REGEN,
+    PK_INFILTRATOR, PK_HACKER, PK_SILVERTONGUE, PK_MERCHANT, PK_RUNNER, PK_LIGHTSLEEPER, PK_COUNT
 };
 struct PerkDef { const char* name; const char* desc; int level; int req; int reqVal; };
 extern PerkDef PERKS[PK_COUNT];
@@ -453,13 +429,13 @@ struct Player {
     int level = 1, xp = 0;
     int pendingLevels = 0;
     float hp = 100, ap = 80, rads = 0;
-    float radXTimer = 0, jetTimer = 0, mentatsTimer = 0;
+    float radXTimer = 0, coffeeTimer = 0, teaTimer = 0, stealthT = 0;
     float healOverTime = 0;
     Inventory inv;
-    int weapon = -1;     // oggetto arma impugnata (-1 = pugni)
+    int tool = TOOL_HANDS;   // attrezzo in mano
     int armor = I_VAULTSUIT;
-    int mag = 0;
     int karma = 0;
+    std::vector<std::string> photos;
     // fisica
     int zone = ZONE_VAULT;
     Vector3 pos{}, vel{};
@@ -469,34 +445,34 @@ struct Player {
     bool sprint = false;
     float eyeH = 1.65f;
     float fallStartY = 0;
-    // combattimento
-    float fireCd = 0, reloadT = 0, equipT = 0, swingT = 0, recoil = 0, flash = 0;
-    bool swingDone = true;
+    // azioni
+    float useCd = 0, equipT = 0, throwT = 0, flash = 0;
     float bob = 0, stepDist = 0, aimT = 0;
-    float hurtFlash = 0, hurtDir = 0;
+    float hurtFlash = 0;
+    float noise = 0;          // rumore prodotto (corsa, salti)
+    float catchImmune = 0;    // tempo di grazia dopo essere stati scacciati
     bool pipLight = false;
     bool thirdPerson = false;
-    float lastCombat = 100;
     // statistiche
-    int kills = 0, locksPicked = 0, termsHacked = 0, questsDone = 0, capsEarned = 0, stimpaksUsed = 0, shots = 0;
-    float playTime = 0;
+    int timesCaught = 0, locksPicked = 0, termsHacked = 0, questsDone = 0, capsEarned = 0, medkitsUsed = 0, repairs = 0, distractions = 0;
+    float walked = 0, playTime = 0;
 };
 
 int SkillValue(Skill s);
 float MaxHP();
 float MaxAP();
 float CarryMax();
-float PlayerDR();
 float PlayerRadRes();
 int XPForLevel(int lvl);
 void GiveXP(int amount, const char* reason = nullptr);
 void GiveItem(int id, int count = 1, bool notify = true);
 void TakeItem(int id, int count = 1);
+bool HasPhoto(const std::string& key);
 
 // ============================================================================
 //  Missioni
 // ============================================================================
-enum QuestId { Q_MAIN, Q_ROACH, Q_MEDS, Q_BEAST, Q_SIGNAL, Q_COUNT };
+enum QuestId { Q_MAIN, Q_ROACH, Q_MEDS, Q_BEAST, Q_SIGNAL, Q_PHOTO, Q_WATER, Q_DOG, Q_COUNT };
 struct Quest { const char* title; int stage = 0; bool done = false; };
 struct QuestObjective { std::string text; int zone = -1; Vector3 pos{}; bool hasPos = false; };
 extern Quest QUESTS[Q_COUNT];
@@ -505,7 +481,8 @@ void CompleteQuest(int q);
 std::vector<QuestObjective> QuestObjectives(int q);
 std::string QuestDescription(int q);
 void QuestsUpdate(float dt);
-void QuestsOnKill(Entity& e);
+void QuestsOnPhoto(const std::string& key);
+void QuestsOnRepair(const std::string& tag);
 void QuestsOnPickup(int item);
 void QuestsOnEnterZone(int zone);
 
@@ -538,20 +515,18 @@ struct Particle {
     bool additive;
     int zone;
 };
-struct Tracer { Vector3 a, b; float t, maxT; Color col; float width; int zone; };
-struct Grenade { Vector3 pos, vel; float fuse; int zone; bool player; float dmg; };
+struct Throwable { Vector3 pos, vel; int kind; int zone; bool landed; float life; float spin; };
 struct DynLight { Vector3 pos; Color col; float range; float t; int zone; };
 
 void FxUpdate(float dt);
 void FxDraw(Camera3D cam);
 void SpawnParticle(int zone, Vector3 p, Vector3 v, float life, float size, Color c, float gravity, bool additive, float grow = 0);
-void SpawnBlood(int zone, Vector3 p, Vector3 dir, Color c, int n);
 void SpawnImpact(int zone, Vector3 p, Vector3 n, bool metal);
-void SpawnExplosion(int zone, Vector3 p, float radius, float dmg, bool byPlayer);
-void SpawnTracer(int zone, Vector3 a, Vector3 b, Color c, float width, float life);
 void SpawnDynLight(int zone, Vector3 p, Color c, float range, float t);
-void ThrowGrenade(int zone, Vector3 p, Vector3 v, bool player);
+void ThrowObject(int zone, Vector3 p, Vector3 v, int kind);
 void EmittersUpdate(int zone, Vector3 camPos, float dt);
+void FxCollectLights(int zone, std::vector<LightSrc>& out);
+void FxClear();
 
 // ============================================================================
 //  Audio
@@ -591,7 +566,7 @@ extern const Color PIP_BG;
 // ============================================================================
 enum GameState {
     GS_MENU, GS_INTRO, GS_CREATE, GS_PLAY, GS_PIPBOY, GS_DIALOGUE, GS_BARTER, GS_LOOT, GS_LOCKPICK,
-    GS_TERMINAL, GS_VATS, GS_PAUSE, GS_LEVELUP, GS_DEAD, GS_ENDING, GS_SLEEP, GS_SAVELOAD, GS_OPTIONS
+    GS_TERMINAL, GS_SCAN, GS_PAUSE, GS_LEVELUP, GS_FAINT, GS_ENDING, GS_SLEEP, GS_SAVELOAD, GS_OPTIONS
 };
 
 struct Settings {
@@ -605,9 +580,6 @@ struct Settings {
 };
 
 struct Message { std::string text; Color col; float t; };
-
-struct VatsTarget { int ent; float chance[3]; };
-struct VatsShot { int ent; int part; };
 
 struct Vendor { std::string name; Inventory inv; int caps; };
 
@@ -634,18 +606,12 @@ struct Game {
     int lootInter = -1, lootEnt = -1;
     int barterVendor = -1, barterNpc = -1;
     int activeTerminal = -1;
-    // VATS
-    std::vector<VatsTarget> vatsTargets;
-    std::vector<VatsShot> vatsQueue;
-    int vatsSel = 0, vatsPart = 0;
-    bool vatsExec = false;
-    float vatsT = 0;
     // transizioni
     float fade = 0;
     int pendingZone = -1;
     Vector3 pendingPos{};
     float pendingYaw = 0;
-    bool inCombat = false;
+    bool chased = false;      // qualcuno ti sta inseguendo
     float geigerAcc = 0;
     float radRate = 0;
     float sleepHours = 0;
@@ -665,42 +631,48 @@ void NewGame();
 void ResetDynamicWorld();
 void ChangeZone(int zone, Vector3 pos, float yaw);
 void PlayerUpdate(float dt);
-void PlayerFire();
-void PlayerReload();
-void EquipWeapon(int item);
+void EquipTool(int tool);
 void EquipArmor(int item);
 void UseItem(int item);
-void PlayerTakeDamage(float dmg, Vector3 from, bool radiation = false);
-void PlayerKilledEntity(Entity& e);
+void PlayerHurt(float dmg, bool radiation);
+void CatchPlayer(Entity& e);
+void PlayerFaint();
+void TakePhoto();
 void UpdateCamera3D();
 void DrawViewModel();
 void DrawPlayerBody();
-int CurrentWeaponDefIndex();
-const WeaponDef& CurrentWeapon();
 bool HostilesNear(float range);
-void AlertNearby(int zone, Vector3 p, float radius);
+int ToolItem(int tool);
+const char* ToolName(int tool);
 
 void EntitiesUpdate(float dt);
 void EntitiesDraw(Camera3D cam);
+void EntitiesDrawShadows(Camera3D cam);
 void DrawEntity(const Entity& e);
-void DamageEntity(Entity& e, float dmg, int part, Vector3 dir, bool byPlayer, bool crit = false);
 bool RaycastEntities(int zone, Vector3 o, Vector3 dir, float maxT, RayHit& hit, int ignore = -1);
-Vector3 EntityPartPos(const Entity& e, int part);
-const char* EntityPartName(const Entity& e, int part);
-void MakeEntityHostile(Entity& e);
+Vector3 EntityCenter(const Entity& e);
+const char* EntityState(const Entity& e);
+const char* EntityHint(const Entity& e);
 Entity* FindEntityByTag(const std::string& tag);
 Interactable* FindInterByTag(const std::string& tag);
-void DrawHumanoid(Vector3 pos, float yaw, const Look& look, float anim, float moveAmt, float aim, float attack, float deathT, int weaponModel, float flash, float scale, bool glow, float crouch = 0);
+void DrawHumanoid(Vector3 pos, float yaw, const Look& look, float anim, float moveAmt, float hold, float action, float lieT, int tool, float flash, float scale, bool glow, float crouch = 0);
+void DrawToolModel(const Matrix& m, int tool, float flash);
+void NoiseAt(int zone, Vector3 p, float radius, bool byPlayer);
+void BaitAt(int zone, Vector3 p);
+void SecurityOff(int zone, bool includeBoss);
+float EntityReach(const Entity& e);
+float EntityRadius(const Entity& e);
+Entity CreateEntity(EntKind k, int zone, Vector3 pos, float yaw = 0);
+Color OutfitColor(int outfit);
 
 void InteractablesDraw(Camera3D cam);
 void InteractablesUpdate(float dt);
 void Interact(int idx);
 bool TryUnlock(Interactable& it);
 
-void VatsEnter();
-void VatsUpdate(float dt);
-void VatsDraw();
-float VatsChance(const Entity& e, int part);
+void ScanEnter();
+void ScanUpdate(float dt);
+void ScanDraw();
 
 void HudDraw();
 void PipBoyUpdate();
@@ -710,13 +682,14 @@ void DialogueDraw();
 void BarterOpen(int vendor, int npc);
 void BarterUpdate();
 void BarterDraw();
-void LootOpen(int inter, int ent);
+void LootOpen(int inter);
 void LootUpdate();
 void LootDraw();
 void LockpickStart(int inter);
 void LockpickUpdate(float dt);
 void LockpickDraw();
 void TerminalStart(int inter);
+void TerminalAction(const std::string& action, Interactable& term);
 void TerminalUpdate(float dt);
 void TerminalDraw();
 void LevelUpOpen();
@@ -730,8 +703,9 @@ void CreateUpdate();
 void CreateDraw();
 void PauseUpdate();
 void PauseDraw();
-void DeadUpdate();
-void DeadDraw();
+void FaintUpdate();
+void FaintWakeUp();
+void FaintDraw();
 void EndingStart();
 void EndingUpdate(float dt);
 void EndingDraw();
@@ -755,8 +729,7 @@ void SaveSettings();
 void LoadSettings();
 void ApplySettings();
 
-// --- costruzione del mondo / modelli dinamici ---
-Entity CreateEntity(EntKind k, int zone, Vector3 pos, float yaw = 0);
+// --- costruzione del mondo ---
 void GenContainerLoot(Inventory& inv, int model, Rng& r, int tier);
 Font& UIFontFor(float px, bool term);
 extern std::vector<Entity> gEntTemplates;
@@ -767,26 +740,14 @@ struct TermEntry { std::string title, text, action; };
 struct TerminalDef { std::string header; std::vector<TermEntry> entries; };
 extern std::vector<TerminalDef> TERMINALS;
 void InitTerminals();
-enum TerminalIds { TERM_OVERSEER, TERM_GATE, TERM_ARMORY, TERM_LAB, TERM_RAIDER, TERM_CLINIC, TERM_COUNT };
-extern const int WEAPON_FIST;
-void DrawWeaponModel(const Matrix& m, int wm, float flash, float spin = 0);
-Color OutfitColor(int outfit);
+enum TerminalIds { TERM_OVERSEER, TERM_GATE, TERM_SECURITY, TERM_LAB, TERM_RAIDER, TERM_CLINIC, TERM_COUNT };
+
 float PlayerSpeedMul();
 int ArmorOutfit();
 Vector3 PlayerEye();
-Vector3 PlayerChest();
-float EntityReach(const Entity& e);
-float EntityRadius(const Entity& e);
-void EntitiesDrawShadows(Camera3D cam);
-int Spec(int st);
 Vector3 PlayerForward();
 float HPCap();
-void PlayerMeleeHit();
-void FireRay(Vector3 o, Vector3 dir, const WeaponDef& w, float dmg, Vector3 muzzle, int vatsTarget = -1, int vatsPart = -1);
-Vector3 MuzzleWorld();
-float WeaponDamage(const WeaponDef& w);
-void FxCollectLights(int zone, std::vector<LightSrc>& out);
-void FxClear();
+int Spec(int st);
 void LocationsUpdate();
 void UIDrawMessages();
 void DropItem(int id);

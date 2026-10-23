@@ -38,7 +38,7 @@ bool SaveGame(int slot) {
     float dist;
     int li = NearestLocation(P.pos, &dist);
     std::string where = P.zone != ZONE_WASTE ? W.zones[P.zone].name : (li >= 0 && dist < 120 ? W.locations[li].name : std::string("Terre Bruciate"));
-    o << "DUSTFALL_SAVE 1\n";
+    o << "DUSTFALL_SAVE 2\n";
     o << P.name << '\n';
     o << where << '\n';
     o << P.level << ' ' << G.day << ' ' << G.timeOfDay << '\n';
@@ -51,11 +51,15 @@ bool SaveGame(int slot) {
     for (int i = 0; i < PK_COUNT; i++) o << ' ' << P.perks[i];
     o << '\n';
     o << P.level << ' ' << P.xp << ' ' << P.pendingLevels << '\n';
-    o << P.hp << ' ' << P.ap << ' ' << P.rads << ' ' << P.radXTimer << ' ' << P.jetTimer << ' ' << P.mentatsTimer << '\n';
-    o << P.weapon << ' ' << P.armor << ' ' << P.mag << ' ' << P.karma << '\n';
+    o << P.hp << ' ' << P.ap << ' ' << P.rads << ' ' << P.radXTimer << ' ' << P.coffeeTimer << ' ' << P.teaTimer << ' ' << P.stealthT << '\n';
+    o << P.tool << ' ' << P.armor << ' ' << P.karma << '\n';
     o << P.zone << ' ' << P.pos.x << ' ' << P.pos.y << ' ' << P.pos.z << ' ' << P.yaw << ' ' << P.pitch << ' ' << P.thirdPerson << '\n';
-    o << P.kills << ' ' << P.locksPicked << ' ' << P.termsHacked << ' ' << P.questsDone << ' ' << P.capsEarned << ' ' << P.stimpaksUsed << ' ' << P.shots << ' ' << P.playTime << '\n';
+    o << P.timesCaught << ' ' << P.locksPicked << ' ' << P.termsHacked << ' ' << P.questsDone << ' ' << P.capsEarned << ' ' << P.medkitsUsed << ' '
+      << P.repairs << ' ' << P.distractions << ' ' << P.walked << ' ' << P.playTime << '\n';
     WriteInv(o, P.inv);
+    o << P.photos.size();
+    for (auto& k : P.photos) o << ' ' << k;
+    o << '\n';
     o << G.flags.size() << '\n';
     for (auto& kv : G.flags) o << kv.first << ' ' << kv.second << '\n';
     for (int q = 0; q < Q_COUNT; q++) o << QUESTS[q].stage << ' ' << QUESTS[q].done << ' ';
@@ -65,8 +69,8 @@ bool SaveGame(int slot) {
     o << '\n';
     o << G.ents.size() << '\n';
     for (auto& e : G.ents) {
-        o << e.dead << ' ' << e.hp << ' ' << e.pos.x << ' ' << e.pos.y << ' ' << e.pos.z << ' ' << e.yaw << ' ' << e.hostile << ' ';
-        WriteInv(o, e.inv);
+        o << e.zone << ' ' << e.pos.x << ' ' << e.pos.y << ' ' << e.pos.z << ' ' << e.yaw << ' ' << e.hostile << ' ' << e.off << ' ' << e.asleep << ' '
+          << e.companion << ' ' << e.home.x << ' ' << e.home.y << ' ' << e.home.z << ' ' << e.territory << '\n';
     }
     o << gInterTemplates.size() << '\n';
     for (size_t i = 0; i < gInterTemplates.size(); i++) {
@@ -94,6 +98,7 @@ std::string SaveInfo(int slot) {
     if (!in) return "";
     std::string magic, name, where;
     std::getline(in, magic);
+    if (magic.rfind("DUSTFALL_SAVE 2", 0) != 0) return "Salvataggio di una versione precedente (non compatibile)";
     std::getline(in, name);
     std::getline(in, where);
     int level = 1, day = 1;
@@ -107,7 +112,7 @@ bool LoadGame(int slot) {
     if (!in) return false;
     std::string magic, name, where;
     std::getline(in, magic);
-    if (magic.rfind("DUSTFALL_SAVE", 0) != 0) {
+    if (magic.rfind("DUSTFALL_SAVE 2", 0) != 0) {
         Notify("Salvataggio non valido.", Col(255, 120, 100));
         return false;
     }
@@ -132,11 +137,19 @@ bool LoadGame(int slot) {
         if (i < PK_COUNT) P.perks[i] = b;
     }
     in >> P.level >> P.xp >> P.pendingLevels;
-    in >> P.hp >> P.ap >> P.rads >> P.radXTimer >> P.jetTimer >> P.mentatsTimer;
-    in >> P.weapon >> P.armor >> P.mag >> P.karma;
+    in >> P.hp >> P.ap >> P.rads >> P.radXTimer >> P.coffeeTimer >> P.teaTimer >> P.stealthT;
+    in >> P.tool >> P.armor >> P.karma;
     in >> P.zone >> P.pos.x >> P.pos.y >> P.pos.z >> P.yaw >> P.pitch >> P.thirdPerson;
-    in >> P.kills >> P.locksPicked >> P.termsHacked >> P.questsDone >> P.capsEarned >> P.stimpaksUsed >> P.shots >> P.playTime;
+    in >> P.timesCaught >> P.locksPicked >> P.termsHacked >> P.questsDone >> P.capsEarned >> P.medkitsUsed >> P.repairs >> P.distractions >> P.walked >> P.playTime;
     ReadInv(in, P.inv);
+    size_t np = 0;
+    in >> np;
+    P.photos.clear();
+    for (size_t i = 0; i < np && in; i++) {
+        std::string k;
+        in >> k;
+        P.photos.push_back(k);
+    }
     size_t nf = 0;
     in >> nf;
     for (size_t i = 0; i < nf; i++) {
@@ -158,9 +171,11 @@ bool LoadGame(int slot) {
     for (size_t i = 0; i < ne && in; i++) {
         Entity tmp;
         Entity& e = i < G.ents.size() ? G.ents[i] : tmp;
-        in >> e.dead >> e.hp >> e.pos.x >> e.pos.y >> e.pos.z >> e.yaw >> e.hostile;
-        ReadInv(in, e.inv);
-        if (e.dead) e.deathT = 10;
+        in >> e.zone >> e.pos.x >> e.pos.y >> e.pos.z >> e.yaw >> e.hostile >> e.off >> e.asleep >> e.companion >> e.home.x >> e.home.y >> e.home.z >> e.territory;
+        e.zone = Clamp(e.zone, 0, ZONE_COUNT - 1);
+        e.ai = e.companion ? AI_FOLLOW : AI_IDLE;
+        e.aware = false;
+        e.alert = 0;
     }
     size_t ni = 0;
     in >> ni;
@@ -194,7 +209,7 @@ bool LoadGame(int slot) {
     int radio = 0;
     in >> radio;
     SetRadioStation(radio);
-    if (P.weapon >= I_COUNT || (P.weapon >= 0 && P.inv.Count(P.weapon) == 0)) P.weapon = -1;
+    if (P.tool < 0 || P.tool >= TOOL_COUNT || (P.tool != TOOL_HANDS && P.inv.Count(ToolItem(P.tool)) == 0)) P.tool = TOOL_HANDS;
     if (P.armor >= I_COUNT || (P.armor >= 0 && P.inv.Count(P.armor) == 0)) P.armor = -1;
     P.zone = Clamp(P.zone, 0, ZONE_COUNT - 1);
     G.gameStarted = true;

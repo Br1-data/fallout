@@ -40,23 +40,6 @@ static std::vector<float> Buf(float sec) { return std::vector<float>((size_t)(se
 
 struct LP { float y = 0, a; explicit LP(float a_) : a(a_) {} float operator()(float x) { y += a * (x - y); return y; } };
 
-static std::vector<float> Gun(float len, float lpA, float decay, float thumpF0, float thumpF1, float thumpDecay, float tail) {
-    auto b = Buf(len);
-    LP lp(lpA), lp2(0.06f);
-    float ph = 0;
-    for (size_t i = 0; i < b.size(); i++) {
-        float t = (float)i / SR;
-        float n = Noise();
-        float crack = lp(n) * expf(-t * decay);
-        float f = thumpF1 + (thumpF0 - thumpF1) * expf(-t * 18);
-        ph += 2 * PI * f / SR;
-        float thump = sinf(ph) * expf(-t * thumpDecay);
-        float echo = lp2(n) * expf(-t * 3.5f) * tail;
-        b[i] = tanhf((crack * 1.4f + thump * 0.9f + echo) * 1.6f);
-    }
-    return b;
-}
-
 static std::vector<float> Sweep(float len, float f0, float f1, float decay, float square, float noiseAmt) {
     auto b = Buf(len);
     float ph = 0;
@@ -126,21 +109,53 @@ static std::vector<float> Voice(float len, float f0, float f1, float lpA, float 
     return b;
 }
 
+// piccolo "ping" metallico (lattine, pioli, attrezzi)
+static std::vector<float> Ping(float len, float f, float decay) {
+    auto b = Buf(len);
+    for (size_t i = 0; i < b.size(); i++) {
+        float t = (float)i / SR;
+        b[i] = (sinf(2 * PI * f * t) + 0.6f * sinf(2 * PI * f * 1.52f * t) + 0.4f * sinf(2 * PI * f * 2.19f * t)) * expf(-t * decay) * 0.5f;
+    }
+    Mix(b, NoiseEnv(0.01f, 0.8f, 0.0003f, 300), 0.6f);
+    return b;
+}
+
 static void BuildSfx() {
-    sBase[SFX_PISTOL] = ToSound(Gun(0.45f, 0.55f, 30, 160, 55, 22, 0.25f), 0.9f);
-    sBase[SFX_RIFLE] = ToSound(Gun(0.9f, 0.45f, 16, 120, 40, 11, 0.5f));
-    sBase[SFX_SHOTGUN] = ToSound(Gun(0.9f, 0.35f, 11, 90, 35, 9, 0.6f));
-    sBase[SFX_AUTO] = ToSound(Gun(0.28f, 0.5f, 34, 150, 60, 25, 0.15f), 0.8f);
-    sBase[SFX_MINIGUN] = ToSound(Gun(0.16f, 0.55f, 45, 170, 70, 30, 0.08f), 0.7f);
     {
-        auto b = Sweep(0.35f, 1900, 260, 9, 0.35f, 0.04f);
-        Mix(b, Sweep(0.35f, 3800, 520, 12, 0, 0), 0.25f);
-        sBase[SFX_LASER] = ToSound(b, 0.8f);
+        // otturatore: due scatti e il trascinamento della pellicola
+        auto b = Buf(0.42f);
+        Mix(b, NoiseEnv(0.02f, 0.9f, 0.0003f, 260, 0.3f), 1.0f, 0.0f);
+        Mix(b, NoiseEnv(0.02f, 0.9f, 0.0003f, 260, 0.3f), 0.8f, 0.07f);
+        Mix(b, Sweep(0.22f, 900, 1300, 6, 0.6f, 0.2f), 0.12f, 0.16f);
+        sBase[SFX_SHUTTER] = ToSound(b, 0.6f);
+    }
+    sBase[SFX_ALARM] = ToSound(Tones({880, 660, 880, 660, 880, 660}, 0.15f, 5, 0.7f), 0.45f);
+    sBase[SFX_CAUGHT] = ToSound(Tones({523, 440, 349}, 0.17f, 6, 0.35f), 0.5f);
+    {
+        // barattolo con i sassolini dentro
+        auto b = Buf(0.8f);
+        for (int c = 0; c < 16; c++) Mix(b, Ping(0.08f, aRng.range(1800, 3200), 60), aRng.range(0.3f, 0.9f), aRng.range(0, 0.6f));
+        Mix(b, Ping(0.3f, 900, 14), 0.8f);
+        sBase[SFX_RATTLE] = ToSound(b, 0.7f);
     }
     {
-        auto b = Sweep(0.6f, 700, 70, 5, 0.2f, 0.15f);
-        Mix(b, NoiseEnv(0.6f, 0.2f, 0.01f, 6), 0.5f);
-        sBase[SFX_PLASMA] = ToSound(b, 0.9f);
+        auto b = Sweep(0.7f, 300, 2600, 3, 0.0f, 0.03f);
+        Mix(b, Sweep(0.7f, 450, 3900, 3.5f, 0.0f, 0.0f), 0.4f);
+        sBase[SFX_STEALTH] = ToSound(b, 0.5f);
+    }
+    {
+        // chiave inglese e cricchetto
+        auto b = Buf(1.2f);
+        for (int c = 0; c < 10; c++) Mix(b, NoiseEnv(0.015f, 0.9f, 0.0003f, 250, 0.4f), 0.5f, 0.05f + c * 0.045f);
+        Mix(b, Ping(0.4f, 1400, 12), 0.8f, 0.6f);
+        Mix(b, Ping(0.4f, 1100, 12), 0.6f, 0.82f);
+        Mix(b, Tones({880, 1175}, 0.08f, 18, 0.1f), 0.35f, 1.0f);
+        sBase[SFX_REPAIR] = ToSound(b, 0.7f);
+    }
+    {
+        auto b = Buf(0.9f);
+        for (int c = 0; c < 4; c++) Mix(b, Ping(0.12f, 700 + c * 30, 40), 0.6f, c * 0.2f);
+        sBase[SFX_CLIMB] = ToSound(b, 0.6f);
     }
     {
         auto b = Buf(0.32f);
@@ -151,18 +166,11 @@ static void BuildSfx() {
             b[i] = (a(n) - c(n)) * sinf(PI * t / 0.32f);
         }
         sBase[SFX_SWING] = ToSound(b, 0.6f);
-        sBase[SFX_THROW] = ToSound(b, 0.5f);
     }
     {
-        auto b = Sweep(0.18f, 140, 55, 22, 0, 0);
-        Mix(b, NoiseEnv(0.05f, 0.4f, 0.001f, 60), 0.6f);
-        sBase[SFX_PUNCH] = ToSound(b);
-        sBase[SFX_LAND] = ToSound(Sweep(0.18f, 100, 50, 25, 0, 0.3f), 0.6f);
-    }
-    {
-        auto b = NoiseEnv(0.18f, 0.22f, 0.001f, 30);
-        Mix(b, Sweep(0.18f, 220, 90, 25, 0, 0), 0.8f);
-        sBase[SFX_HIT] = ToSound(b, 0.8f);
+        auto b = Buf(0.5f);
+        for (int c = 0; c < 3; c++) Mix(b, NoiseEnv(0.07f, 0.35f, 0.02f, 30, 0.2f), 0.8f, c * 0.14f);
+        sBase[SFX_SNIFF] = ToSound(b, 0.5f);
     }
     sBase[SFX_IMPACT] = ToSound(NoiseEnv(0.14f, 0.7f, 0.001f, 45, 0.15f), 0.6f);
     {
@@ -191,28 +199,7 @@ static void BuildSfx() {
         Mix(b, Tones({1568}, 0.0f, 6, 0.0f), 0.3f, 0.18f);
         sBase[SFX_QUEST] = ToSound(b, 0.55f);
     }
-    {
-        auto b = Buf(2.4f);
-        LP lp(0.3f);
-        float ph = 0;
-        for (size_t i = 0; i < b.size(); i++) {
-            float t = (float)i / SR;
-            lp.a = 0.04f + 0.4f * expf(-t * 3);
-            float n = lp(Noise());
-            ph += 2 * PI * (30 + 30 * expf(-t * 4)) / SR;
-            b[i] = tanhf((n * 2.2f + sinf(ph) * 1.2f) * expf(-t * 2.0f) * 1.5f);
-        }
-        sBase[SFX_EXPLOSION] = ToSound(b);
-    }
-    {
-        auto b = Buf(0.55f);
-        Mix(b, NoiseEnv(0.03f, 0.8f, 0.0005f, 120), 0.9f, 0.04f);
-        Mix(b, NoiseEnv(0.2f, 0.3f, 0.05f, 12, 0.1f), 0.3f, 0.12f);
-        Mix(b, NoiseEnv(0.04f, 0.8f, 0.0005f, 100), 1.0f, 0.38f);
-        Mix(b, Tones({1400}, 0.02f, 80), 0.3f, 0.38f);
-        sBase[SFX_RELOAD] = ToSound(b, 0.6f);
-    }
-    sBase[SFX_EMPTY] = ToSound(NoiseEnv(0.05f, 0.9f, 0.0005f, 150), 0.5f);
+    sBase[SFX_DISCOVER] = ToSound(Tones({659, 880, 1318}, 0.09f, 9, 0.0f), 0.5f);
     {
         auto b = NoiseEnv(0.45f, 0.5f, 0.01f, 5, 0.2f);
         for (size_t i = 0; i < b.size(); i++) b[i] *= (sinf((float)i / SR * 2 * PI * 38) > 0 ? 1.0f : 0.2f);
@@ -228,6 +215,7 @@ static void BuildSfx() {
         Mix(b, Voice(0.18f, 500, 280, 0.4f, 0.5f), 1.0f, 0.22f);
         sBase[SFX_DOG] = ToSound(b, 0.7f);
     }
+    sBase[SFX_BARK] = ToSound(Voice(0.16f, 700, 460, 0.45f, 0.35f), 0.6f);
     {
         auto b = NoiseEnv(0.9f, 0.05f, 0.05f, 3);
         Mix(b, Sweep(0.6f, 280, 420, 4, 0.1f, 0), 0.15f, 0.1f);
@@ -259,10 +247,10 @@ static void BuildSfx() {
     sBase[SFX_TYPE] = ToSound(NoiseEnv(0.03f, 0.8f, 0.0005f, 160, 0.2f), 0.4f);
     sBase[SFX_TERM_OK] = ToSound(Tones({1000, 1500}, 0.09f, 20, 0.5f), 0.35f);
     sBase[SFX_TERM_FAIL] = ToSound(Tones({180, 150}, 0.12f, 8, 0.9f), 0.35f);
-    sBase[SFX_VATS_IN] = ToSound(Sweep(0.5f, 300, 1300, 3, 0.1f, 0.02f), 0.5f);
-    sBase[SFX_VATS_OUT] = ToSound(Sweep(0.4f, 1300, 280, 4, 0.1f, 0.02f), 0.5f);
+    sBase[SFX_SCAN_IN] = ToSound(Sweep(0.5f, 300, 1300, 3, 0.1f, 0.02f), 0.5f);
+    sBase[SFX_SCAN_OUT] = ToSound(Sweep(0.4f, 1300, 280, 4, 0.1f, 0.02f), 0.5f);
     sBase[SFX_HURT] = ToSound(Voice(0.25f, 170, 115, 0.2f, 0.4f), 0.6f);
-    sBase[SFX_DEATH] = ToSound(Voice(0.9f, 150, 70, 0.15f, 0.3f), 0.7f);
+    sBase[SFX_FAINT] = ToSound(Sweep(1.3f, 600, 110, 1.6f, 0.0f, 0.02f), 0.5f);
     {
         auto b = NoiseEnv(0.45f, 0.9f, 0.02f, 6, 0.5f);
         Mix(b, Tones({1600}, 0.0f, 30), 0.2f, 0.35f);
@@ -274,10 +262,24 @@ static void BuildSfx() {
         sBase[SFX_EAT] = ToSound(b, 0.5f);
     }
     sBase[SFX_JUMP] = ToSound(NoiseEnv(0.12f, 0.3f, 0.02f, 25), 0.4f);
+    sBase[SFX_LAND] = ToSound(Sweep(0.18f, 100, 50, 25, 0, 0.3f), 0.6f);
     {
         auto b = Buf(0.35f);
         for (int c = 0; c < 9; c++) Mix(b, NoiseEnv(0.01f, 0.9f, 0.0003f, 400), aRng.range(0.3f, 1.0f), aRng.range(0, 0.3f));
         sBase[SFX_SPARK] = ToSound(b, 0.5f);
+    }
+    {
+        // russare: inspirazione rauca e lento sbuffo
+        auto b = Buf(1.6f);
+        LP lp(0.05f);
+        for (size_t i = 0; i < b.size(); i++) {
+            float t = (float)i / SR;
+            float in = t < 0.9f ? sinf(PI * t / 0.9f) : 0.0f;
+            float out = t >= 0.9f ? sinf(PI * (t - 0.9f) / 0.7f) * 0.5f : 0.0f;
+            float rasp = 0.6f + 0.4f * sinf(2 * PI * 32 * t);
+            b[i] = lp(Noise()) * 3 * (in * rasp + out) + sinf(2 * PI * 55 * t) * in * 0.3f;
+        }
+        sBase[SFX_SNORE] = ToSound(b, 0.6f);
     }
 }
 

@@ -386,7 +386,7 @@ float RadiationAt(int zone, Vector3 p) {
         if (d < s.radius) r += s.strength * (1.0f - d / s.radius);
     }
     for (auto& e : G.ents)
-        if (!e.dead && e.zone == zone && e.radAura > 0) {
+        if (e.zone == zone && e.radAura > 0) {
             float d = Vector3Distance(p, e.pos);
             if (d < 10) r += e.radAura * (1.0f - d / 10);
         }
