@@ -1,1 +1,181 @@
-# fallout
+# DUSTFALL — Cronache delle Terre Bruciate
+
+Avventura **3D in prima/terza persona** per **Windows**, ambientata in un mondo post-apocalittico in
+stile *Fallout* — ma **senza violenza**: niente armi, niente combattimenti, nessuno muore. Un
+abitante di un Rifugio antiatomico esce per la prima volta nelle Terre Bruciate armato solo di una
+fotocamera, di un po' di astuzia e di tanta curiosità.
+
+![Menu principale](docs/screenshots/00_menu.jpg)
+
+| | |
+|---|---|
+| ![Ferrocittà](docs/screenshots/01_ferrocitta.jpg) | ![Scanner del Pip-Boy](docs/screenshots/02_scanner.jpg) |
+| ![Lo Squarciatore addormentato](docs/screenshots/03_squarciatore.jpg) | ![Torre Radio](docs/screenshots/04_torre_radio.jpg) |
+| ![Base Delta-9 di notte](docs/screenshots/05_base_notte.jpg) | ![Catalogo fotografico](docs/screenshots/06_catalogo.jpg) |
+| ![Covo dei Teschi](docs/screenshots/07_covo_dei_teschi.jpg) | ![Dialogo](docs/screenshots/08_dialogo.jpg) |
+
+## Come giocare
+
+1. Scarica **[`release/Dustfall.exe`](release/Dustfall.exe)** (un unico file, nessuna installazione).
+2. Fai doppio clic. Al primo avvio Windows SmartScreen potrebbe avvisare che l'app non è firmata:
+   clicca su *Ulteriori informazioni → Esegui comunque*.
+
+Requisiti: Windows 10/11 a 64 bit e una scheda video con OpenGL 3.3 (praticamente qualsiasi PC
+degli ultimi dieci anni). I salvataggi vengono scritti nella cartella `saves` accanto all'eseguibile
+(i salvataggi della vecchia versione 1.0 non sono compatibili).
+
+## La storia
+
+Anno 2161. Il reattore a fusione del **Rifugio 33** si sta spegnendo. Il Sovrintendente ti affida
+una missione disperata: trovare una cella di fusione sperimentale nella **Base Delta-9**, sigillata
+da decenni e sorvegliata da sentinelle robotiche che scortano fuori chiunque si avvicini.
+
+Lungo la strada incontrerai l'insediamento di **Ferrocittà**, la banda territoriale di **Teschio**,
+un naturalista che sogna di fotografare una bestia leggendaria, un'esploratrice bloccata su una
+torre radio e un cane che ha perso la strada di casa.
+
+Il finale cambia in base a come hai risolto le missioni e al tuo karma.
+
+## Senza violenza, ma avventuroso
+
+Le creature e i guardiani delle Terre Bruciate non feriscono: se ti scoprono ti inseguono e, se ti
+raggiungono, ti **scacciano dal loro territorio** (e i Teschi ti alleggeriscono di qualche tappo).
+Per andare avanti devi osservare, nasconderti, distrarre, convincere e riparare:
+
+- **Fotocamera** — fotografa creature e luoghi notevoli per il catalogo delle Terre Bruciate
+  (22 soggetti, ognuno con la sua ricompensa in esperienza). Clic destro per lo zoom.
+- **Furtività** — accovacciati, muoviti al buio, evita i coni di luce delle telecamere. Correre e
+  saltare fa rumore; l'indicatore in alto ti dice quando qualcuno è sospettoso.
+- **Esche di carne** — attirano animali e bestie, che si fermano a mangiare.
+- **Barattoli rumorosi** — lanciali per mandare guardie, mutanti e robot a controllare altrove.
+- **Mantello ottico** — mezzo minuto di quasi invisibilità.
+- **Scanner del Pip-Boy** — ferma il tempo e mostra chi c'è intorno, cosa sta facendo e come
+  aggirarlo, oltre ai soggetti ancora da fotografare.
+- **Riparazioni** — pompe, trasmettitori e generatori da rimettere in funzione con kit e ricambi.
+- **Scale**, **serrature** da scassinare, **terminali** da violare, **dialoghi** con prove di
+  abilità, baratto e accordi.
+- **Ruggine**, un cane da salvare che poi ti segue e ringhia piano quando fiuta un pericolo.
+- Se i PF finiscono (radiazioni, cadute, stanchezza) **perdi i sensi** e ti risvegli in clinica.
+
+### Missioni
+
+- **Il cuore del Rifugio** — la missione principale. La tessera del cancello si ottiene da Teschio
+  con la parlantina, con i tappi, scambiandola con un disco d'anteguerra o rubandola dalla sua
+  cassaforte; in alternativa si può violare il terminale del cancello. Dentro la base la Sentinella
+  Mk.V si spegne con un codice di manutenzione... o si aggira.
+- **Ospiti indesiderati** — porta via i sacchi di cibo marcio che attirano i radscarafaggi.
+- **Medicine per Ferrocittà** — recupera i rifornimenti dall'ospedale delle rovine, tra i ghoul.
+- **La bestia della gola** — fotografa lo Squarciatore senza svegliarlo.
+- **Segnale nel deserto** — aiuta un'esploratrice e ripara il trasmettitore in cima alla torre.
+- **Il catalogo di Jack** — otto fotografie per il naturalista di Ferrocittà.
+- **Acqua per Ferrocittà** — ripara la pompa dell'acqua della città.
+- **Il cane di Rita** — ritrova Ruggine alla fattoria abbandonata.
+
+## Caratteristiche
+
+- Mondo aperto di circa 750×750 metri con 10 luoghi da esplorare: Rifugio 33, Ferrocittà,
+  Stazione Atomo, Covo dei Teschi, Rovine di Nuova Speranza, Cratere Verde, Torre Radio,
+  Fattoria Abbandonata, Gola dello Squarciatore e Base Delta-9 (con laboratori sotterranei).
+- Ciclo giorno/notte con cielo, sole, luna, stelle e nebbia di polvere; luci dinamiche e fuochi.
+  Di notte è più facile passare inosservati (a meno di accendere la luce del Pip-Boy).
+- Sistema **S.P.E.C.I.A.L.**, 10 abilità (Atletica, Riparazione, Sopravvivenza, Natura, Medicina,
+  Scasso, Scienza, Baratto, Eloquenza, Furtività), 22 talenti, livelli fino al 20.
+- Intelligenza artificiale con vista, udito, sospetto, inseguimento, ricerca dei rumori, esche,
+  allarmi delle telecamere e territori.
+- **Pip-Boy** completo: statistiche, attrezzi e inventario, missioni, luoghi, catalogo fotografico,
+  mappa con viaggio rapido, radio con musica swing generata in tempo reale.
+- Abbigliamento con effetti (furtività, peso trasportabile, eloquenza, radiazioni), kit medici,
+  Rad-Via, cibo, caffè e tisane.
+- Radiazioni con contatore Geiger, che riducono i punti ferita massimi.
+- Minigiochi di **scasso** delle serrature e di **violazione dei terminali**.
+- Salvataggi (5 slot + automatico + rapido), opzioni, schermo intero.
+- Tutto è generato dal codice: modelli 3D, terreno, texture, effetti sonori e musica.
+  L'eseguibile è autonomo.
+
+## Comandi
+
+| Tasto | Azione |
+|---|---|
+| **W A S D** | Muoversi |
+| **Mouse** | Guardarsi intorno |
+| **Clic sinistro** | Usare l'attrezzo in mano (scattare, lanciare) |
+| **Clic destro** | Zoom della fotocamera |
+| **1 / 2 / 3 / 4, rotella** | Mani libere / fotocamera / esca / barattolo |
+| **B** | Lanciare un'esca di carne |
+| **G** | Lanciare un barattolo rumoroso |
+| **E** | Interagire, parlare, raccogliere, riparare, salire sulle scale |
+| **Q** | Scanner del Pip-Boy (ferma il tempo) |
+| **TAB** | Pip-Boy |
+| **Shift** | Correre (consuma PA, fa rumore) |
+| **C / Ctrl** | Accovacciarsi (furtività) |
+| **Spazio** | Saltare |
+| **H** | Usare un kit medico |
+| **F** | Attivare un mantello ottico |
+| **V** | Prima / terza persona |
+| **L** | Luce del Pip-Boy |
+| **F5 / F9** | Salvataggio / caricamento rapido |
+| **F11** | Schermo intero |
+| **ESC** | Pausa |
+
+## Compilare dai sorgenti
+
+Il gioco è scritto in C++17 con [raylib 5.5](https://www.raylib.com/), scaricata automaticamente
+da CMake.
+
+**Windows (Visual Studio 2022 + CMake):** esegui `build_windows.bat`, oppure:
+
+```bat
+cmake -S . -B build -A x64
+cmake --build build --config Release
+```
+
+**Linux:**
+
+```sh
+sudo apt install build-essential cmake libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libasound2-dev
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+./build/Dustfall
+```
+
+**Eseguibile Windows da Linux (MinGW-w64):** `./tools/build_windows_cross.sh`
+(richiede il pacchetto `mingw-w64`). Il risultato viene copiato in `release/Dustfall.exe`.
+
+Ogni push viene compilato anche da GitHub Actions (`.github/workflows/build.yml`), che produce
+l'eseguibile Windows come artefatto ed esegue un test automatico.
+
+### Test automatico
+
+`Dustfall --selftest` gioca da solo l'intera trama (dialoghi, fotografie, esche, barattoli, essere
+scacciati, riparazioni, scale, terminali, tutte le otto missioni, svenimento, salvataggio/caricamento
+e finale) e verifica che tutto funzioni.
+`Dustfall --newgame --zone 0 --pos 0 60 --yaw 180 --time 15 --shot foto.png` scatta uno
+screenshot da una posizione qualsiasi.
+
+### Struttura del codice
+
+| File | Contenuto |
+|---|---|
+| `src/game.h` | Tipi e stato condiviso |
+| `src/main.cpp` | Ciclo principale, giorno/notte, transizioni, self-test |
+| `src/render.cpp` | Shader di illuminazione e cielo, costruzione delle mesh |
+| `src/world.cpp` | Collisioni, raycast, terreno |
+| `src/world_build.cpp` | Generazione del mondo, luoghi, interni, PNG |
+| `src/entities.cpp` | Creature e PNG: vista, udito, inseguimenti, distrazioni, modelli animati |
+| `src/player.cpp` | Giocatore, attrezzi, fotografia, visuale in prima persona |
+| `src/fx.cpp` | Effetti, oggetti lanciati, scanner del Pip-Boy |
+| `src/interact.cpp` | Oggetti interattivi: contenitori, porte, scale, riparazioni |
+| `src/quests.cpp` | Missioni, dialoghi, catalogo fotografico, terminali |
+| `src/pipboy.cpp` | Pip-Boy, inventario, baratto, saccheggio, livelli |
+| `src/menus.cpp` | Menu, creazione del personaggio, svenimento, finale, opzioni |
+| `src/minigames.cpp` | Scasso e violazione dei terminali |
+| `src/audio.cpp` | Sintesi di effetti sonori, ambiente e radio |
+| `src/save.cpp` | Salvataggi e impostazioni |
+
+## Crediti
+
+- [raylib](https://github.com/raysan5/raylib) — licenza zlib/libpng.
+- Font [Share Tech Mono](https://fonts.google.com/specimen/Share+Tech+Mono) e
+  [VT323](https://fonts.google.com/specimen/VT323) — SIL Open Font License (vedi `assets/fonts`).
+
+*Dustfall* è un progetto amatoriale ispirato alla serie *Fallout*; non è affiliato a Bethesda o
+Interplay e non ne usa marchi o risorse.
