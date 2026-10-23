@@ -393,7 +393,7 @@ static void FindInteraction() {
         Vector3 c = e.pos + V3(0, e.dead ? 0.3f : 1.1f * e.scale, 0);
         Vector3 to = c - eye;
         float d = Vector3Length(to);
-        if (d > (e.dead ? 2.6f : 3.2f) + EntityRadius(e)) continue;
+        if (d > (e.dead ? 2.6f : 4.0f) + EntityRadius(e)) continue;
         float ang = acosf(Clamp(Vector3DotProduct(to / d, f), -1.f, 1.f));
         if (d < 1.2f) ang *= 0.5f;
         if (ang < best) { best = ang; G.lookEnt = i; }

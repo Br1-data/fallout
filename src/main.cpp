@@ -18,7 +18,7 @@ void NewGame() {
     G.player = Player();
     Player& P = G.player;
     P.zone = ZONE_VAULT;
-    P.pos = V3(17.0f, 0, 7);
+    P.pos = V3(18.7f, 0, 7);
     P.yaw = PI / 2;
     P.inv.Add(I_VAULTSUIT);
     P.armor = I_VAULTSUIT;

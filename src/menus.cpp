@@ -13,9 +13,9 @@ static bool MenuItem(const std::string& label, float x, float y, float size, boo
     return hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
-static int VerticalNav(int sel, int n) {
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) { sel = (sel + 1) % n; PlaySfx(SFX_UI_MOVE, 0.5f); }
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) { sel = (sel + n - 1) % n; PlaySfx(SFX_UI_MOVE, 0.5f); }
+static int VerticalNav(int sel, int n, bool letters = true) {
+    if (IsKeyPressed(KEY_DOWN) || (letters && IsKeyPressed(KEY_S))) { sel = (sel + 1) % n; PlaySfx(SFX_UI_MOVE, 0.5f); }
+    if (IsKeyPressed(KEY_UP) || (letters && IsKeyPressed(KEY_W))) { sel = (sel + n - 1) % n; PlaySfx(SFX_UI_MOVE, 0.5f); }
     return sel;
 }
 
@@ -165,7 +165,7 @@ void CreateUpdate() {
     if (sCrPage == 0) {
         // righe: 0 nome, 1 aspetto, 2..8 SPECIAL, 9 continua
         int n = 10;
-        sCrSel = VerticalNav(sCrSel, n);
+        sCrSel = VerticalNav(sCrSel, n, sCrSel != 0); // mentre si scrive il nome W/S sono lettere
         for (int i = 0; i < n; i++)
             if (UIHover(Wd / 2 - 420, 150 + i * 46, 560, 40) && Vector2Length(GetMouseDelta()) > 0) sCrSel = i;
         if (sCrSel == 0) {
