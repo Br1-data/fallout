@@ -420,6 +420,7 @@ struct Entity {
     float anim = 0, moveAmt = 0, hitFlash = 0, deathT = 0, aimBlend = 0;
     bool dead = false;
     float cripple = 0;
+    float stateFlee = 0;
     float talkT = 0;
     Inventory inv;
     Look look;
@@ -440,6 +441,7 @@ extern PerkDef PERKS[PK_COUNT];
 
 struct Player {
     std::string name = "Viandante";
+    bool female = false;
     int special[ST_COUNT] = {5, 5, 5, 5, 5, 5, 5};
     int skillPts[SK_COUNT] = {};
     bool tagged[SK_COUNT] = {};
@@ -765,3 +767,18 @@ void DrawWeaponModel(const Matrix& m, int wm, float flash, float spin = 0);
 Color OutfitColor(int outfit);
 float PlayerSpeedMul();
 int ArmorOutfit();
+Vector3 PlayerEye();
+Vector3 PlayerChest();
+float EntityReach(const Entity& e);
+float EntityRadius(const Entity& e);
+void EntitiesDrawShadows(Camera3D cam);
+int Spec(int st);
+Vector3 PlayerForward();
+float HPCap();
+void PlayerMeleeHit();
+void FireRay(Vector3 o, Vector3 dir, const WeaponDef& w, float dmg, Vector3 muzzle, int vatsTarget = -1, int vatsPart = -1);
+Vector3 MuzzleWorld();
+float WeaponDamage(const WeaponDef& w);
+void FxCollectLights(int zone, std::vector<LightSrc>& out);
+void FxClear();
+void LocationsUpdate();
