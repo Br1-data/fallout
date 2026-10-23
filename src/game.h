@@ -34,6 +34,7 @@ float Hash2(int x, int z, int seed);
 float ValueNoise(float x, float z, int seed);
 float Fbm(float x, float z, int octaves, int seed);
 
+inline int Clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 inline float Clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
 inline float SmoothStepF(float a, float b, float x) { float t = Clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); }
 inline float LerpF(float a, float b, float t) { return a + (b - a) * t; }
@@ -110,6 +111,7 @@ struct Renderer {
     Vector3 zenith{0.3f, 0.4f, 0.6f};
     float fogDensity = 0.004f, night = 0.f;
     float lightLevel = 1.f; // luminosità media (per cartelli e particelle)
+    Vector3 skySun{0, 1, 0}; // direzione reale del sole (per il cielo)
 };
 extern Renderer R;
 
@@ -652,6 +654,7 @@ struct Game {
     float autosaveT = 0;
     int pipTab = 0, pipSub = 0, pipSel = 0;
     float pipScroll = 0;
+    int mouseSkip = 0;
 };
 extern Game G;
 
@@ -782,3 +785,5 @@ float WeaponDamage(const WeaponDef& w);
 void FxCollectLights(int zone, std::vector<LightSrc>& out);
 void FxClear();
 void LocationsUpdate();
+void UIDrawMessages();
+void DropItem(int id);

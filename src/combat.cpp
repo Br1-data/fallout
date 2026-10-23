@@ -401,20 +401,23 @@ void VatsDraw() {
     if (!G.vatsExec && !G.vatsTargets.empty()) {
         Entity& e = G.ents[G.vatsTargets[G.vatsSel].ent];
         float s = UIS();
-        for (int p = 0; p < 3; p++) {
-            Vector3 wp = EntityPartPos(e, p);
-            Vector2 sp = GetWorldToScreen(wp, G.cam);
+        Vector2 cs = GetWorldToScreen(EntityPartPos(e, 0), G.cam);
+        float cx = cs.x / s, cy = cs.y / s;
+        const int order[3] = {1, 0, 2};
+        for (int k = 0; k < 3; k++) {
+            int p = order[k];
+            Vector2 sp = GetWorldToScreen(EntityPartPos(e, p), G.cam);
             float x = sp.x / s, y = sp.y / s;
             bool sel = p == G.vatsPart;
             int pct = (int)roundf(VatsChance(e, p) * 100);
             std::string label = Fmt("%s %d%%", EntityPartName(e, p), pct);
             Vector2 m = UIMeasure(label, 20);
-            float bx = x + 30, by = y - 14;
+            float bx = cx + 90, by = cy - 58 + k * 40;
             UIRect(bx - 6, by - 2, m.x + 12, 28, sel ? Color{30, 120, 50, 220} : Color{10, 40, 15, 180});
             UIRectLines(bx - 6, by - 2, m.x + 12, 28, sel ? 2 : 1, pip);
             UIText(label, bx, by + 2, 20, sel ? Color{220, 255, 220, 255} : pip);
             UIRect(x - 4, y - 4, 8, 8, sel ? Color{220, 255, 220, 255} : pip);
-            DrawLineEx(V2(x * s, y * s), V2((bx - 6) * s, (by + 12) * s), 1.5f, pip);
+            DrawLineEx(V2(x * s, y * s), V2((bx - 6) * s, (by + 12) * s), 1.5f, ColAlpha(pip, sel ? 1.0f : 0.5f));
         }
         // nome e salute
         Vector2 hp = GetWorldToScreen(e.pos + V3(0, 2.3f * e.scale + (e.kind == EK_DEATHCLAW ? 1.0f : 0), 0), G.cam);

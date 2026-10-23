@@ -510,7 +510,7 @@ void DrawLimb(const Matrix& parent, Vector3 a, Vector3 b, float radius, Color c,
 
 void DrawSky(Camera3D cam) {
     Vector3 hor = R.fogColor;
-    SetShaderValue(R.sky, R.skLocSunDir, &R.sunDir, SHADER_UNIFORM_VEC3);
+    SetShaderValue(R.sky, R.skLocSunDir, &R.skySun, SHADER_UNIFORM_VEC3);
     SetShaderValue(R.sky, R.skLocZenith, &R.zenith, SHADER_UNIFORM_VEC3);
     SetShaderValue(R.sky, R.skLocHorizon, &hor, SHADER_UNIFORM_VEC3);
     Vector3 sc = R.sunColor;

@@ -293,9 +293,9 @@ void HudDraw() {
     Bar(bx + 34, by + 4, 230, 14, P.hp / mhp, PIP);
     if (cap < mhp) UIRect(bx + 34 + 230 * cap / mhp, by + 4, 230 * (1 - cap / mhp), 14, Color{200, 60, 40, 200});
     Compass(bx, by - 46, 264);
-    if (P.rads > 0 || G.radRate > 0.01f) {
-        Color rc = G.radRate > 0.01f ? Col(255, 230, 80) : PIP_DIM;
-        UIText(Fmt("RAD %d", (int)P.rads) + (G.radRate > 0.01f ? Fmt("  +%.0f/s", G.radRate) : std::string()), bx + 34, by + 22, 16, rc);
+    if (P.rads >= 1 || G.radRate > 0.2f) {
+        Color rc = G.radRate > 0.2f ? Col(255, 230, 80) : PIP_DIM;
+        UIText(Fmt("RAD %d", (int)P.rads) + (G.radRate > 0.2f ? Fmt("  +%.1f/s", G.radRate) : std::string()), bx + 34, by + 22, 16, rc);
     }
     // in basso a destra: PA e munizioni
     float rx = Wd - 300;
@@ -324,7 +324,12 @@ void HudDraw() {
     if (P.pendingLevels > 0) UIText("▲ LIVELLO SUPERIORE  (TAB)", bx, by + 44, 15, Col(255, 230, 120));
     if (P.inv.Weight() > CarryMax()) UIText("SOVRACCARICO", Wd / 2, 680, 18, Col(255, 140, 90), 1);
 
-    // messaggi
+    if (G.settings.showFps) UIText(Fmt("%d FPS", GetFPS()), Wd - 90, 10, 16, PIP_DIM);
+    (void)S;
+}
+
+void UIDrawMessages() {
+    float Wd = UIW();
     float my = 24;
     for (auto& m : G.messages) {
         float a = Clamp01(m.t / 1.0f);
@@ -340,6 +345,4 @@ void HudDraw() {
         UIText(G.bigMsg, Wd / 2, 158, 40, ColAlpha(PIP, a), 1);
         if (!G.bigSub.empty()) UIText(G.bigSub, Wd / 2, 206, 20, ColAlpha(PIP_DIM, a), 1);
     }
-    if (G.settings.showFps) UIText(Fmt("%d FPS", GetFPS()), Wd - 90, 10, 16, PIP_DIM);
-    (void)S;
 }

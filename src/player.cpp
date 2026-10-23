@@ -443,6 +443,7 @@ void PlayerUpdate(float dt) {
     P.lastCombat += dt;
     // --- visuale ---
     Vector2 md = GetMouseDelta();
+    if (G.mouseSkip > 0) { G.mouseSkip--; md = V2(0, 0); }
     float sens = 0.0022f * G.settings.sensitivity * (P.aimT > 0.5f ? 0.55f : 1.0f);
     P.yaw -= md.x * sens;
     P.pitch -= md.y * sens * (G.settings.invertY ? -1.f : 1.f);
@@ -663,9 +664,10 @@ void DrawViewModel() {
     sway.x = LerpF(sway.x, Clamp(md.x * 0.0006f, -0.03f, 0.03f), Clamp01(GetFrameTime() * 8));
     sway.y = LerpF(sway.y, Clamp(md.y * 0.0006f, -0.03f, 0.03f), Clamp01(GetFrameTime() * 8));
     float aim = P.aimT;
-    Vector3 hip = w.melee ? V3(0.24f, -0.26f, 0.42f) : V3(0.17f, -0.17f, 0.36f);
-    Vector3 ads = V3(0.0f, -0.075f, 0.28f);
-    if (w.model == WM_RIFLE) ads = V3(0.0f, -0.105f, 0.22f);
+    Vector3 hip = w.melee ? V3(0.2f, -0.24f, 0.55f) : V3(0.16f, -0.165f, 0.52f);
+    Vector3 ads = V3(0.0f, -0.072f, 0.42f);
+    if (w.model == WM_RIFLE) ads = V3(0.0f, -0.102f, 0.34f);
+    if (w.model == WM_MINIGUN) { hip = V3(0.16f, -0.22f, 0.5f); ads = V3(0.08f, -0.18f, 0.45f); }
     Vector3 pos = Vector3Lerp(hip, ads, aim);
     pos = pos + V3(sinf(P.bob) * 0.012f * bobAmt * (1 - aim * 0.8f) - sway.x, fabsf(cosf(P.bob)) * 0.01f * bobAmt * (1 - aim * 0.8f) + sway.y, -P.recoil * 0.004f);
     float pitch = -P.recoil * 0.02f, yawA = 0, roll = 0;
@@ -700,10 +702,10 @@ void DrawViewModel() {
     if (w.model == WM_FIST) {
         for (int s = -1; s <= 1; s += 2) {
             float jab = (s > 0 && P.swingT > 0.35f) ? sinf((P.swingT - 0.35f) / 0.65f * PI) : 0;
-            Vector3 fist = V3(s * 0.13f, -0.17f + jab * 0.05f, 0.3f + jab * 0.18f);
+            Vector3 fist = V3(s * 0.15f, -0.2f + jab * 0.05f, 0.45f + jab * 0.2f);
             if (P.equipT > 0) fist.y -= P.equipT * 0.6f;
             fist = fist + V3(sinf(P.bob) * 0.01f * bobAmt, 0, 0);
-            DrawLimb(S, V3(s * 0.22f, -0.4f, 0.0f), fist - V3(0, 0, 0.04f), 0.045f, sleeve);
+            DrawLimb(S, V3(s * 0.25f, -0.5f, 0.2f), fist - V3(0, 0, 0.04f), 0.045f, sleeve);
             DrawPrim(PR_CUBE, MatTRS(fist, V3(0, 0, 0), V3(0.08f, 0.08f, 0.1f)) * S, skin);
         }
         return;
@@ -713,11 +715,11 @@ void DrawViewModel() {
     DrawWeaponModel(W, w.model, P.flash > 0 ? 1.0f : 0.0f, spin);
     // mani e braccia
     Vector3 grip = Vector3Transform(V3(0, -0.04f, 0), wm);
-    DrawLimb(S, V3(0.28f, -0.45f, 0.02f), grip + V3(0.01f, -0.03f, -0.05f), 0.045f, sleeve);
+    DrawLimb(S, V3(0.3f, -0.5f, 0.22f), grip + V3(0.01f, -0.03f, -0.05f), 0.045f, sleeve);
     DrawPrim(PR_CUBE, MatTRS(V3(0, -0.04f, -0.01f), V3(0, 0, 0), V3(0.05f, 0.06f, 0.08f)) * W, skin);
     if (!w.melee && w.model != WM_GRENADE) {
         Vector3 fore = Vector3Transform(V3(0, -0.02f, w.twoHanded ? 0.22f : 0.04f), wm);
-        DrawLimb(S, V3(-0.24f, -0.45f, 0.05f), fore + V3(-0.02f, -0.03f, -0.04f), 0.045f, sleeve);
+        DrawLimb(S, V3(-0.26f, -0.5f, 0.28f), fore + V3(-0.02f, -0.03f, -0.04f), 0.045f, sleeve);
         DrawPrim(PR_CUBE, MatTRS(V3(-0.025f, -0.035f, w.twoHanded ? 0.22f : 0.04f), V3(0, 0, 0), V3(0.05f, 0.05f, 0.08f)) * W, skin);
     }
     // vampata

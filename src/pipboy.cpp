@@ -198,7 +198,7 @@ void PipBoyUpdate() {
     }
     if (G.pipTab == 3) {
         // viaggio rapido con clic sulla mappa
-        float ms = std::min(r.h - 120, r.w * 0.6f);
+        float ms = std::min(r.h - 190, r.w * 0.6f);
         float mx = r.x + 40, my = r.y + 100;
         for (int i = 0; i < (int)W.locations.size(); i++) {
             Location& l = W.locations[i];
@@ -242,7 +242,7 @@ void PipBoyDraw() {
         UIText(SUBTABS[G.pipTab][i], tx, r.y + 58, 18, i == G.pipSub ? PIP : PIP_DARK);
     }
     // barra inferiore
-    float by = r.y + r.h - 40;
+    float by = r.y + r.h - 62;
     UIRect(r.x + 20, by - 6, r.w - 40, 2, PIP_DIM);
     int hours = (int)G.timeOfDay, mins = (int)((G.timeOfDay - hours) * 60);
     std::string info = Fmt("PF %d/%d    PA %d/%d    LV %d    PE %d/%d    Peso %d/%d    Tappi %d    Giorno %d  %02d:%02d",
@@ -292,8 +292,8 @@ void PipBoyDraw() {
                 if (!any) UIText("Nessuno", rx + 10, y, 18, PIP_DARK);
                 if (P.pendingLevels > 0) {
                     float a = 0.6f + 0.4f * sinf(G.time * 5);
-                    UIRect(rx - 10, r.y + r.h - 110, rw, 44, ColAlpha(PIP_DARK, a));
-                    UIText("AVANZAMENTO DI LIVELLO! Premi INVIO", rx + rw / 2 - 10, r.y + r.h - 100, 22, PIP, 1);
+                    UIRect(rx - 10, r.y + r.h - 130, rw, 44, ColAlpha(PIP_DARK, a));
+                    UIText("AVANZAMENTO DI LIVELLO! Premi INVIO", rx + rw / 2 - 10, r.y + r.h - 120, 22, PIP, 1);
                 }
                 break;
             }
@@ -341,9 +341,9 @@ void PipBoyDraw() {
         }
     } else if (G.pipTab == 1) {
         auto list = InvList(G.pipSub);
-        float maxRows = (r.h - 170) / 30;
+        float maxRows = (r.h - 200) / 30;
         G.pipScroll = std::max(0.0f, (G.pipSel - maxRows + 2) * 30);
-        BeginScissorMode((int)(r.x * UIS()), (int)((ly - 4) * UIS()), (int)(r.w * UIS()), (int)((r.h - 150) * UIS()));
+        BeginScissorMode((int)(r.x * UIS()), (int)((ly - 4) * UIS()), (int)(r.w * UIS()), (int)((r.h - 180) * UIS()));
         for (int i = 0; i < (int)list.size(); i++) {
             int id = list[i];
             int n = P.inv.Count(id);
@@ -367,7 +367,7 @@ void PipBoyDraw() {
             y += 10;
             for (auto& l : UIWrap(ITEMS[id].desc, 18, rw)) { UIText(l, rx, y, 18, PIP_DIM); y += 22; }
             const char* act = ITEMS[id].type == IT_WEAPON || ITEMS[id].type == IT_ARMOR ? ((id == P.weapon || id == P.armor) ? "INVIO) Togli" : "INVIO) Equipaggia") : (ITEMS[id].type == IT_AID ? "INVIO) Usa" : (id == I_SCOUTNOTE ? "INVIO) Leggi" : ""));
-            UIText(std::string(act) + (ITEMS[id].type != IT_KEY ? "    X) Lascia" : ""), rx, r.y + r.h - 80, 18, PIP_DIM);
+            UIText(std::string(act) + (ITEMS[id].type != IT_KEY ? "    X) Lascia" : ""), rx, r.y + r.h - 100, 18, PIP_DIM);
         }
     } else if (G.pipTab == 2) {
         if (G.pipSub == 0) {
@@ -397,7 +397,7 @@ void PipBoyDraw() {
             for (auto& l : W.locations) ListRow(k++, l.discovered ? l.name : "???", l.discovered ? Fmt("%d m", (int)DistXZ(P.pos, l.pos)) : "");
         }
     } else if (G.pipTab == 3) {
-        float ms = std::min(r.h - 120, r.w * 0.6f);
+        float ms = std::min(r.h - 190, r.w * 0.6f);
         float mx = r.x + 40, my = r.y + 100;
         DrawTexturePro(W.mapTex, Rectangle{0, 0, (float)W.mapTex.width, (float)W.mapTex.height}, Rectangle{mx * UIS(), my * UIS(), ms * UIS(), ms * UIS()}, V2(0, 0), 0, WHITE);
         UIRectLines(mx, my, ms, ms, 2, PIP_DIM);
@@ -438,7 +438,7 @@ void PipBoyDraw() {
         UIText("Clic su un luogo scoperto", ix, my + 80, 18, PIP);
         UIText("per il viaggio rapido.", ix, my + 102, 18, PIP);
         if (!hover.empty()) UIText("> " + hover, ix, my + 150, 22, Color{220, 255, 220, 255});
-        UIText(Fmt("Giorno %d, ore %02d:%02d", G.day, (int)G.timeOfDay, (int)((G.timeOfDay - (int)G.timeOfDay) * 60)), ix, my + ms - 30, 18, PIP_DIM);
+        
     } else if (G.pipTab == 4) {
         const char* names[] = {"Radio Ferrocittà", "Segnale di soccorso", "Spegni la radio"};
         int st[] = {1, 2, 0};
@@ -458,7 +458,7 @@ void PipBoyDraw() {
         }
         UIText("INVIO) Sintonizza", rx, ly + 260, 18, PIP_DIM);
     }
-    UIText("Q/E scheda   A/D sezione   W/S scorri   INVIO seleziona   TAB chiudi", r.x + r.w / 2, r.y + r.h + 22 - 2, 15, Col(170, 160, 120), 1);
+    UIText("Q/E scheda   A/D sezione   W/S scorri   INVIO seleziona   TAB chiudi", r.x + r.w / 2, r.y + r.h - 26, 15, PIP_DIM, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -491,7 +491,7 @@ void LootOpen(int inter, int ent) {
 
 void LootUpdate() {
     Inventory* inv = LootInv();
-    if (!inv || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_TAB) || IsKeyPressed(KEY_E) && inv->Empty()) {
+    if (!inv || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_TAB) || (IsKeyPressed(KEY_E) && inv->Empty())) {
         SetGameState(GS_PLAY);
         return;
     }
