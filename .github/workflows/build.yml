@@ -1,0 +1,37 @@
+name: Build
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configura
+        run: cmake -S . -B build -A x64
+      - name: Compila
+        run: cmake --build build --config Release --parallel
+      - name: Carica l'eseguibile
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dustfall-Windows
+          path: build/Release/Dustfall.exe
+
+  linux-selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dipendenze
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libgl1-mesa-dri libasound2-dev xvfb
+      - name: Compila
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+      - name: Test automatico (gioca l'intera trama)
+        run: xvfb-run -a -s "-screen 0 1280x720x24" ./build/Dustfall --selftest

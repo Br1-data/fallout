@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <functional>
 #include <map>
 #include <string>
@@ -423,6 +424,7 @@ struct Entity {
     bool dead = false;
     float cripple = 0;
     float stateFlee = 0;
+    float detourT = 0, detourYaw = 0;
     float talkT = 0;
     Inventory inv;
     Look look;
@@ -747,6 +749,7 @@ void SetGameState(GameState s);
 bool SaveGame(int slot);
 bool LoadGame(int slot);
 bool SaveExists(int slot);
+long SaveTime(int slot);
 std::string SaveInfo(int slot);
 void SaveSettings();
 void LoadSettings();

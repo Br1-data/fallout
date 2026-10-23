@@ -169,7 +169,7 @@ static int HitSpheres(const Entity& e, HitSphere* out) {
 }
 
 Vector3 EntityPartPos(const Entity& e, int part) {
-    HitSphere hs[8];
+    HitSphere hs[8]{};
     int n = HitSpheres(e, hs);
     for (int i = 0; i < n; i++)
         if (hs[i].part == part) return hs[i].c;
@@ -194,7 +194,7 @@ bool RaycastEntities(int zone, Vector3 o, Vector3 dir, float maxT, RayHit& hit, 
         if (tc < -3 || tc > best + 3) continue;
         float d2 = Vector3LengthSqr(oc) - tc * tc;
         if (d2 > 16 * e.scale * e.scale) continue;
-        HitSphere hs[8];
+        HitSphere hs[8]{};
         int n = HitSpheres(e, hs);
         for (int k = 0; k < n; k++) {
             Vector3 L = hs[k].c - o;
@@ -332,18 +332,33 @@ static bool MoveTowards(Entity& e, Vector3 target, float speed, float dt, bool f
     if (d < 0.25f) { e.vel = V3(0, 0, 0); return true; }
     float baseYaw = atan2f(to.x, to.z);
     float r = EntityRadius(e), h = EntityHeight(e);
+    float probeLen = std::max(1.0f, r * 2.5f);
+    auto Free = [&](float a) { return !CircleBlocked(e.zone, e.pos + YawDir(a) * probeLen, r * 0.9f, h, 0.6f); };
     float chosen = baseYaw;
-    static const float offs[] = {0, 0.5f, 1.0f, 1.5f, 2.1f, 2.7f};
-    bool ok = false;
-    for (float o : offs) {
-        for (int s = 0; s < (o == 0 ? 1 : 2); s++) {
-            float a = baseYaw + (s == 0 ? o * e.strafe : -o * e.strafe);
-            Vector3 probe = e.pos + YawDir(a) * std::max(1.0f, r * 2.5f);
-            if (!CircleBlocked(e.zone, probe, r * 0.9f, h, 0.6f)) { chosen = a; ok = true; break; }
-        }
-        if (ok) break;
+    if (e.detourT > 0) {
+        // mantiene la deviazione scelta per aggirare l'ostacolo
+        e.detourT -= dt;
+        if (Free(baseYaw) && e.detourT < 0.8f) e.detourT = 0;
+        else if (Free(e.detourYaw)) chosen = e.detourYaw;
+        else e.detourT = 0;
     }
-    if (!ok) e.strafe = -e.strafe;
+    if (e.detourT <= 0) {
+        static const float offs[] = {0, 0.5f, 1.0f, 1.5f, 2.1f, 2.7f};
+        bool ok = false;
+        for (float o : offs) {
+            for (int s = 0; s < (o == 0 ? 1 : 2); s++) {
+                float a = baseYaw + (s == 0 ? o * e.strafe : -o * e.strafe);
+                if (Free(a)) {
+                    chosen = a;
+                    ok = true;
+                    if (o > 0.4f) { e.detourT = 1.6f; e.detourYaw = a; }
+                    break;
+                }
+            }
+            if (ok) break;
+        }
+        if (!ok) e.strafe = -e.strafe;
+    }
     float spd = speed * (e.cripple > 0.35f ? 0.55f : 1.0f);
     e.vel = YawDir(chosen) * spd;
     e.pos = e.pos + e.vel * dt;

@@ -705,8 +705,9 @@ void DrawViewModel() {
             Vector3 fist = V3(s * 0.15f, -0.2f + jab * 0.05f, 0.45f + jab * 0.2f);
             if (P.equipT > 0) fist.y -= P.equipT * 0.6f;
             fist = fist + V3(sinf(P.bob) * 0.01f * bobAmt, 0, 0);
-            DrawLimb(S, V3(s * 0.25f, -0.5f, 0.2f), fist - V3(0, 0, 0.04f), 0.045f, sleeve);
-            DrawPrim(PR_CUBE, MatTRS(fist, V3(0, 0, 0), V3(0.08f, 0.08f, 0.1f)) * S, skin);
+            DrawLimb(S, V3(s * 0.25f, -0.5f, 0.2f), fist - V3(0, 0, 0.05f), 0.032f, sleeve);
+            DrawLimb(S, fist - V3(0, 0, 0.1f), fist - V3(0, 0, 0.03f), 0.03f, skin);
+            DrawPrim(PR_SPHERE, MatTRS(fist, V3(0, 0, 0), V3(0.075f, 0.068f, 0.085f)) * S, skin);
         }
         return;
     }
@@ -715,11 +716,11 @@ void DrawViewModel() {
     DrawWeaponModel(W, w.model, P.flash > 0 ? 1.0f : 0.0f, spin);
     // mani e braccia
     Vector3 grip = Vector3Transform(V3(0, -0.04f, 0), wm);
-    DrawLimb(S, V3(0.3f, -0.5f, 0.22f), grip + V3(0.01f, -0.03f, -0.05f), 0.045f, sleeve);
+    DrawLimb(S, V3(0.3f, -0.5f, 0.22f), grip + V3(0.01f, -0.03f, -0.05f), 0.032f, sleeve);
     DrawPrim(PR_CUBE, MatTRS(V3(0, -0.04f, -0.01f), V3(0, 0, 0), V3(0.05f, 0.06f, 0.08f)) * W, skin);
     if (!w.melee && w.model != WM_GRENADE) {
         Vector3 fore = Vector3Transform(V3(0, -0.02f, w.twoHanded ? 0.22f : 0.04f), wm);
-        DrawLimb(S, V3(-0.26f, -0.5f, 0.28f), fore + V3(-0.02f, -0.03f, -0.04f), 0.045f, sleeve);
+        DrawLimb(S, V3(-0.26f, -0.5f, 0.28f), fore + V3(-0.02f, -0.03f, -0.04f), 0.032f, sleeve);
         DrawPrim(PR_CUBE, MatTRS(V3(-0.025f, -0.035f, w.twoHanded ? 0.22f : 0.04f), V3(0, 0, 0), V3(0.05f, 0.05f, 0.08f)) * W, skin);
     }
     // vampata

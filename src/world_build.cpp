@@ -861,7 +861,7 @@ void BuildTown() {
             float t = (float)k / n;
             Vector3 p = Vector3Lerp(a, b, t) - V3(0, sinf(t * PI) * 0.8f, 0);
             Color bc = (k % 3 == 0) ? Col(255, 220, 140) : (k % 3 == 1) ? Col(255, 120, 90) : Col(150, 220, 255);
-            Z->B(p).Sphere(MatTRS(p, V3(0, 0, 0), V3(0.16f, 0.2f, 0.16f)), 3, 5, Glow(bc));
+            Z->B(p).Sphere(MatTRS(p, V3(0, 0, 0), V3(0.11f, 0.14f, 0.11f)), 3, 5, Glow(bc));
         }
         Light(Vector3Lerp(a, b, 0.5f) - V3(0, 1, 0), Col(255, 200, 140), 12, 0.7f, 0.05f, true);
     }
@@ -1022,7 +1022,7 @@ void BuildRaiderCamp() {
             Vector3 cp = V3(px, 0, pz) + V3(cosf(a), 0, -sinf(a)) * (k * 1.2f);
             Z->AddCyl(cp.x, cp.z, 0.9f, gg - 1, gg + h);
         }
-        if (gen.chance(0.3f)) Car(px + sinf(a) * 3, pz + cosf(a) * 3, a + PI / 2, ColJitter(C_RUST_L, gen, 0.2f));
+        if (gen.chance(0.3f)) Car(px + sinf(a) * 3, pz + cosf(a) * 3, a + PI / 2, ColJitter(ColLerp(C_RUST_L, Col(120, 115, 105), 0.5f), gen, 0.2f));
     }
     // teschi sulle picche all'ingresso
     for (int s = -1; s <= 1; s += 2) {
@@ -1704,8 +1704,8 @@ void BuildVault() {
     Z->floorY = 0;
     Z->bmin = V3(-32, -2, -38);
     Z->bmax = V3(26, 12, 44);
-    Z->ambSky = V3(0.30f, 0.33f, 0.38f);
-    Z->ambGround = V3(0.18f, 0.19f, 0.22f);
+    Z->ambSky = V3(0.36f, 0.39f, 0.44f);
+    Z->ambGround = V3(0.22f, 0.23f, 0.26f);
     Z->fog = V3(0.03f, 0.04f, 0.05f);
     Z->fogDensity = 0.022f;
     Color wall = C_VAULT_WALL, floor = C_VAULT_FLOOR, ceil = Col(80, 86, 92);
@@ -1855,8 +1855,8 @@ void BuildBaseInterior() {
     Z->floorY = 0;
     Z->bmin = V3(-34, -2, -8);
     Z->bmax = V3(28, 12, 82);
-    Z->ambSky = V3(0.22f, 0.24f, 0.24f);
-    Z->ambGround = V3(0.12f, 0.12f, 0.12f);
+    Z->ambSky = V3(0.26f, 0.28f, 0.28f);
+    Z->ambGround = V3(0.15f, 0.15f, 0.15f);
     Z->fog = V3(0.02f, 0.025f, 0.02f);
     Z->fogDensity = 0.028f;
     Color wall = Col(128, 130, 120), floor = Col(80, 82, 78), ceil = Col(70, 72, 68);

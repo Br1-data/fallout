@@ -8,6 +8,7 @@ static std::string SlotPath(int slot) { return SaveDir() + Fmt("slot%d.sav", slo
 static std::string SettingsPath() { return std::string(GetApplicationDirectory()) + "settings.cfg"; }
 
 bool SaveExists(int slot) { return FileExists(SlotPath(slot).c_str()); }
+long SaveTime(int slot) { return GetFileModTime(SlotPath(slot).c_str()); }
 
 static void WriteInv(std::ostream& o, const Inventory& inv) {
     o << inv.items.size();

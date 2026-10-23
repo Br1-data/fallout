@@ -35,7 +35,7 @@ static int NewestSave() {
     long long bt = -1;
     for (int i = 0; i <= 6; i++) {
         if (!SaveExists(i)) continue;
-        long long t = GetFileModTime(Fmt("saves/slot%d.sav", i).c_str());
+        long long t = SaveTime(i);
         if (t > bt) { bt = t; best = i; }
     }
     return best;

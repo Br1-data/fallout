@@ -692,7 +692,6 @@ void InteractablesDraw(Camera3D cam) {
                 }
                 for (int k = 0; k < 3; k++) DrawPrim(PR_CYL, MatTRS(it.pos + V3(0, 1.6f + k * 1.8f, 0), V3(0, 0, 0), V3(3.8f, 0.25f, 3.8f)), Col(120, 122, 126));
                 DrawPrim(PR_CYL, MatTRS(it.pos + V3(0, 6.4f, 0), V3(0, 0, 0), V3(4.6f, 0.8f, 4.6f)), Col(90, 92, 96));
-                SpawnDynLight(it.zone, it.pos + V3(0, 3.5f, 0), core, 16, 0.02f);
                 if (!fixed && gRng.chance(0.05f)) {
                     for (int i = 0; i < 5; i++) SpawnParticle(it.zone, it.pos + V3(gRng.range(-1.6f, 1.6f), gRng.range(1, 6), gRng.range(-1.6f, 1.6f)), V3(gRng.range(-2, 2), gRng.range(0, 2), gRng.range(-2, 2)), 0.3f, 0.05f, Col(255, 200, 120), 9.8f, true);
                     PlaySfx3D(SFX_SPARK, it.pos, 0.4f);
