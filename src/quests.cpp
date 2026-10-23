@@ -253,7 +253,7 @@ void DlgOverseer(int n) {
             Say("Prendi questa pistola 10mm, delle munizioni e qualche medicina. Il Pip-Boy al tuo polso ti mostrerà mappa e obiettivi. La porta principale è in fondo al corridoio nord. E... torna vivo, " + Name() + ".");
             Opt("[Prendi l'equipaggiamento] Tornerò.", [] {
                 GiveItem(I_PISTOL, 1);
-                GiveItem(I_AMMO_10, 36);
+                GiveItem(I_AMMO_10, 48);
                 GiveItem(I_STIMPAK, 3);
                 GiveItem(I_RADAWAY, 1);
                 GiveItem(I_BOBBYPIN, 4);
