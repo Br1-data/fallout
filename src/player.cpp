@@ -671,13 +671,18 @@ void DrawViewModel() {
         pitch = -0.9f * k1 + 1.2f * k2;
     }
     if (P.flash > 0.15f) hand.z -= 0.01f;
-    if (P.tool == TOOL_CAMERA) hand = V3(0.06f, -0.12f, 0.36f) + bob - V3(0, lower, 0);
-    Matrix toolM = MatrixRotateXYZ(V3(pitch, yawA, 0)) * MatrixTranslate(hand.x, hand.y, hand.z);
+    float toolScale = 0.75f;
+    if (P.tool == TOOL_CAMERA) {
+        // la fotocamera si tiene con due mani, in basso a destra
+        hand = V3(0.2f, -0.22f, 0.5f) + bob - V3(0, lower, 0);
+        toolScale = 0.6f;
+    }
+    Matrix toolM = MatrixScale(toolScale, toolScale, toolScale) * MatrixRotateXYZ(V3(pitch, yawA, 0)) * MatrixTranslate(hand.x - (P.tool == TOOL_CAMERA ? 0.05f : 0), hand.y + 0.03f, hand.z);
     DrawLimb(S, V3(0.3f, -0.5f, 0.22f), hand - V3(0, 0.02f, 0.06f), 0.032f, sleeve);
     DrawPrim(PR_SPHERE, MatTRS(hand, V3(0, 0, 0), V3(0.07f, 0.065f, 0.085f)) * S, skin);
     if (P.tool != TOOL_HANDS) DrawToolModel(toolM * S, P.tool, P.flash > 0 ? 1.0f : 0.0f);
     // mano sinistra
-    Vector3 lh = P.tool == TOOL_CAMERA ? V3(-0.06f, -0.12f, 0.37f) + bob - V3(0, lower, 0) : V3(-0.18f, -0.25f, 0.45f) + bob - V3(0, lower, 0);
+    Vector3 lh = P.tool == TOOL_CAMERA ? V3(0.1f, -0.23f, 0.5f) + bob - V3(0, lower, 0) : V3(-0.18f, -0.25f, 0.45f) + bob - V3(0, lower, 0);
     DrawLimb(S, V3(-0.3f, -0.5f, 0.24f), lh - V3(0, 0.02f, 0.06f), 0.032f, sleeve);
     DrawPrim(PR_SPHERE, MatTRS(lh, V3(0, 0, 0), V3(0.07f, 0.065f, 0.085f)) * S, skin);
 }

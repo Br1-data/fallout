@@ -325,20 +325,32 @@ void ScanDraw() {
         labels.push_back(l);
     }
     // più lontani prima, così i vicini restano leggibili sopra
-    std::sort(labels.begin(), labels.end(), [](const ScanLabel& a, const ScanLabel& b) { return a.dist > b.dist; });
+    // i più vicini hanno la precedenza; le etichette che si sovrappongono salgono
+    std::sort(labels.begin(), labels.end(), [](const ScanLabel& a, const ScanLabel& b) { return a.dist < b.dist; });
+    std::vector<Rectangle> placed;
     for (auto& l : labels) {
         Vector2 sp;
         if (!OnScreen(l.pos, sp)) continue;
         float x = sp.x / s, y = sp.y / s;
         float fs = l.dist < 15 ? 18.0f : 15.0f;
         std::string dist = Fmt("%.0f m", l.dist);
-        float w = std::max({UIMeasure(l.title, fs).x, UIMeasure(l.line1, fs - 2).x, UIMeasure(l.line2, fs - 4).x, 60.0f}) + 14;
+        float w = std::max({UIMeasure(l.title, fs).x + UIMeasure(dist, fs - 4).x + 16, UIMeasure(l.line1, fs - 2).x, UIMeasure(l.line2, fs - 4).x, 60.0f}) + 14;
         float h = 8 + fs + (l.line1.empty() ? 0 : fs) + (l.line2.empty() ? 0 : fs - 2);
+        float bx = x + 10, by = y - h - 6;
+        for (int tries = 0; tries < 12; tries++) {
+            bool hit = false;
+            for (auto& r : placed)
+                if (bx < r.x + r.width && bx + w > r.x && by < r.y + r.height && by + h > r.y) { by = r.y - h - 4; hit = true; }
+            if (!hit) break;
+        }
+        if (by < 4) continue;
+        placed.push_back(Rectangle{bx, by, w, h});
         UIRect(x - 3, y - 3, 6, 6, l.col);
-        UIRect(x + 10, y - h - 6, w, h, Color{4, 22, 10, (unsigned char)(200 * k)});
-        UIRectLines(x + 10, y - h - 6, w, h, 1, ColAlpha(l.col, k));
-        DrawLineEx(V2(x * s, y * s), V2((x + 10) * s, (y - 6) * s), 1.2f, ColAlpha(l.col, 0.7f * k));
-        float ty = y - h - 2;
+        UIRect(bx, by, w, h, Color{4, 22, 10, (unsigned char)(200 * k)});
+        UIRectLines(bx, by, w, h, 1, ColAlpha(l.col, k));
+        DrawLineEx(V2(x * s, y * s), V2(bx * s, (by + h) * s), 1.2f, ColAlpha(l.col, 0.7f * k));
+        x = bx - 10;
+        float ty = by + 4;
         UIText(l.title, x + 17, ty, fs, ColAlpha(l.col, k));
         UIText(dist, x + 10 + w - 6, ty, fs - 4, ColAlpha(PIP_DIM, k), 2);
         ty += fs;

@@ -1,17 +1,18 @@
 # DUSTFALL — Cronache delle Terre Bruciate
 
-Gioco di ruolo d'azione **3D in prima/terza persona** per **Windows**, ambientato in un mondo
-post-apocalittico in stile *Fallout*: un abitante di un Rifugio antiatomico esce per la prima volta
-nelle Terre Bruciate per salvare la propria casa.
+Avventura **3D in prima/terza persona** per **Windows**, ambientata in un mondo post-apocalittico in
+stile *Fallout* — ma **senza violenza**: niente armi, niente combattimenti, nessuno muore. Un
+abitante di un Rifugio antiatomico esce per la prima volta nelle Terre Bruciate armato solo di una
+fotocamera, di un po' di astuzia e di tanta curiosità.
 
 ![Menu principale](docs/screenshots/00_menu.jpg)
 
 | | |
 |---|---|
-| ![Ferrocittà](docs/screenshots/01_ferrocitta.jpg) | ![Rovine](docs/screenshots/02_rovine.jpg) |
-| ![Reattore](docs/screenshots/03_reattore.jpg) | ![Dialogo](docs/screenshots/08_dialogo.jpg) |
-| ![S.P.A.T.](docs/screenshots/04_spat.jpg) | ![Pip-Boy](docs/screenshots/05_pipboy_mappa.jpg) |
-| ![Terminale](docs/screenshots/06_terminale.jpg) | ![Covo dei Teschi](docs/screenshots/07_covo_dei_teschi.jpg) |
+| ![Ferrocittà](docs/screenshots/01_ferrocitta.jpg) | ![Scanner del Pip-Boy](docs/screenshots/02_scanner.jpg) |
+| ![Lo Squarciatore addormentato](docs/screenshots/03_squarciatore.jpg) | ![Torre Radio](docs/screenshots/04_torre_radio.jpg) |
+| ![Base Delta-9 di notte](docs/screenshots/05_base_notte.jpg) | ![Catalogo fotografico](docs/screenshots/06_catalogo.jpg) |
+| ![Covo dei Teschi](docs/screenshots/07_covo_dei_teschi.jpg) | ![Dialogo](docs/screenshots/08_dialogo.jpg) |
 
 ## Come giocare
 
@@ -20,26 +21,55 @@ nelle Terre Bruciate per salvare la propria casa.
    clicca su *Ulteriori informazioni → Esegui comunque*.
 
 Requisiti: Windows 10/11 a 64 bit e una scheda video con OpenGL 3.3 (praticamente qualsiasi PC
-degli ultimi dieci anni). I salvataggi vengono scritti nella cartella `saves` accanto all'eseguibile.
+degli ultimi dieci anni). I salvataggi vengono scritti nella cartella `saves` accanto all'eseguibile
+(i salvataggi della vecchia versione 1.0 non sono compatibili).
 
 ## La storia
 
 Anno 2161. Il reattore a fusione del **Rifugio 33** si sta spegnendo. Il Sovrintendente ti affida
 una missione disperata: trovare una cella di fusione sperimentale nella **Base Delta-9**, sigillata
-da decenni e sorvegliata da robot impazziti. Lungo la strada incontrerai l'insediamento di
-**Ferrocittà**, la banda di predoni di **Teschio**, ghoul, mutanti, radscarafaggi e una bestia
-leggendaria nascosta in una gola a nord-ovest.
+da decenni e sorvegliata da sentinelle robotiche che scortano fuori chiunque si avvicini.
 
-Il finale cambia in base alle tue scelte e al tuo karma.
+Lungo la strada incontrerai l'insediamento di **Ferrocittà**, la banda territoriale di **Teschio**,
+un naturalista che sogna di fotografare una bestia leggendaria, un'esploratrice bloccata su una
+torre radio e un cane che ha perso la strada di casa.
+
+Il finale cambia in base a come hai risolto le missioni e al tuo karma.
+
+## Senza violenza, ma avventuroso
+
+Le creature e i guardiani delle Terre Bruciate non feriscono: se ti scoprono ti inseguono e, se ti
+raggiungono, ti **scacciano dal loro territorio** (e i Teschi ti alleggeriscono di qualche tappo).
+Per andare avanti devi osservare, nasconderti, distrarre, convincere e riparare:
+
+- **Fotocamera** — fotografa creature e luoghi notevoli per il catalogo delle Terre Bruciate
+  (22 soggetti, ognuno con la sua ricompensa in esperienza). Clic destro per lo zoom.
+- **Furtività** — accovacciati, muoviti al buio, evita i coni di luce delle telecamere. Correre e
+  saltare fa rumore; l'indicatore in alto ti dice quando qualcuno è sospettoso.
+- **Esche di carne** — attirano animali e bestie, che si fermano a mangiare.
+- **Barattoli rumorosi** — lanciali per mandare guardie, mutanti e robot a controllare altrove.
+- **Mantello ottico** — mezzo minuto di quasi invisibilità.
+- **Scanner del Pip-Boy** — ferma il tempo e mostra chi c'è intorno, cosa sta facendo e come
+  aggirarlo, oltre ai soggetti ancora da fotografare.
+- **Riparazioni** — pompe, trasmettitori e generatori da rimettere in funzione con kit e ricambi.
+- **Scale**, **serrature** da scassinare, **terminali** da violare, **dialoghi** con prove di
+  abilità, baratto e accordi.
+- **Ruggine**, un cane da salvare che poi ti segue e ringhia piano quando fiuta un pericolo.
+- Se i PF finiscono (radiazioni, cadute, stanchezza) **perdi i sensi** e ti risvegli in clinica.
 
 ### Missioni
 
-- **Il cuore del Rifugio** — la missione principale (con più soluzioni: tessera di Teschio oppure
-  violazione del terminale del cancello).
-- **Infestazione** — libera la Stazione Atomo dai radscarafaggi.
-- **Medicine per Ferrocittà** — recupera i rifornimenti dall'ospedale delle rovine.
-- **La bestia della gola** — dai la caccia allo Squarciatore.
-- **Segnale nel deserto** — segui un segnale di soccorso captato dalla radio del Pip-Boy.
+- **Il cuore del Rifugio** — la missione principale. La tessera del cancello si ottiene da Teschio
+  con la parlantina, con i tappi, scambiandola con un disco d'anteguerra o rubandola dalla sua
+  cassaforte; in alternativa si può violare il terminale del cancello. Dentro la base la Sentinella
+  Mk.V si spegne con un codice di manutenzione... o si aggira.
+- **Ospiti indesiderati** — porta via i sacchi di cibo marcio che attirano i radscarafaggi.
+- **Medicine per Ferrocittà** — recupera i rifornimenti dall'ospedale delle rovine, tra i ghoul.
+- **La bestia della gola** — fotografa lo Squarciatore senza svegliarlo.
+- **Segnale nel deserto** — aiuta un'esploratrice e ripara il trasmettitore in cima alla torre.
+- **Il catalogo di Jack** — otto fotografie per il naturalista di Ferrocittà.
+- **Acqua per Ferrocittà** — ripara la pompa dell'acqua della città.
+- **Il cane di Rita** — ritrova Ruggine alla fattoria abbandonata.
 
 ## Caratteristiche
 
@@ -47,18 +77,17 @@ Il finale cambia in base alle tue scelte e al tuo karma.
   Stazione Atomo, Covo dei Teschi, Rovine di Nuova Speranza, Cratere Verde, Torre Radio,
   Fattoria Abbandonata, Gola dello Squarciatore e Base Delta-9 (con laboratori sotterranei).
 - Ciclo giorno/notte con cielo, sole, luna, stelle e nebbia di polvere; luci dinamiche e fuochi.
-- Sistema **S.P.E.C.I.A.L.** (Forza, Percezione, Resistenza, Carisma, Intelligenza, Agilità,
-  Fortuna), 10 abilità, 22 talenti, livelli fino al 20.
-- **S.P.A.T.** (Sistema di Puntamento Assistito Tattico): ferma il tempo, mira a testa, torso
-  o gambe con la percentuale di successo e guarda i colpi al rallentatore.
-- **Pip-Boy** completo: statistiche, inventario, missioni, mappa con viaggio rapido, radio con
-  musica swing generata in tempo reale.
-- Armi da fuoco, laser, al plasma, mitragliatrice rotante, armi da mischia e granate.
-- Armature (anche l'armatura potenziata), stimpak, Rad-Via, cibo, droghe.
+  Di notte è più facile passare inosservati (a meno di accendere la luce del Pip-Boy).
+- Sistema **S.P.E.C.I.A.L.**, 10 abilità (Atletica, Riparazione, Sopravvivenza, Natura, Medicina,
+  Scasso, Scienza, Baratto, Eloquenza, Furtività), 22 talenti, livelli fino al 20.
+- Intelligenza artificiale con vista, udito, sospetto, inseguimento, ricerca dei rumori, esche,
+  allarmi delle telecamere e territori.
+- **Pip-Boy** completo: statistiche, attrezzi e inventario, missioni, luoghi, catalogo fotografico,
+  mappa con viaggio rapido, radio con musica swing generata in tempo reale.
+- Abbigliamento con effetti (furtività, peso trasportabile, eloquenza, radiazioni), kit medici,
+  Rad-Via, cibo, caffè e tisane.
 - Radiazioni con contatore Geiger, che riducono i punti ferita massimi.
-- Dialoghi a scelta multipla con prove di abilità, mercanti e baratto, karma.
 - Minigiochi di **scasso** delle serrature e di **violazione dei terminali**.
-- Intelligenza artificiale con furtività, allerta, coperture semplici, fuga.
 - Salvataggi (5 slot + automatico + rapido), opzioni, schermo intero.
 - Tutto è generato dal codice: modelli 3D, terreno, texture, effetti sonori e musica.
   L'eseguibile è autonomo.
@@ -69,26 +98,24 @@ Il finale cambia in base alle tue scelte e al tuo karma.
 |---|---|
 | **W A S D** | Muoversi |
 | **Mouse** | Guardarsi intorno |
-| **Clic sinistro** | Sparare / colpire |
-| **Clic destro** | Mirare |
-| **R** | Ricaricare |
-| **E** | Interagire, parlare, raccogliere, perquisire |
-| **Q** | S.P.A.T. (puntamento assistito) |
+| **Clic sinistro** | Usare l'attrezzo in mano (scattare, lanciare) |
+| **Clic destro** | Zoom della fotocamera |
+| **1 / 2 / 3 / 4, rotella** | Mani libere / fotocamera / esca / barattolo |
+| **B** | Lanciare un'esca di carne |
+| **G** | Lanciare un barattolo rumoroso |
+| **E** | Interagire, parlare, raccogliere, riparare, salire sulle scale |
+| **Q** | Scanner del Pip-Boy (ferma il tempo) |
 | **TAB** | Pip-Boy |
-| **Shift** | Correre (consuma PA) |
+| **Shift** | Correre (consuma PA, fa rumore) |
 | **C / Ctrl** | Accovacciarsi (furtività) |
 | **Spazio** | Saltare |
-| **G** | Lanciare una granata |
-| **H** | Usare uno stimpak |
-| **1–9 / rotella** | Cambiare arma |
+| **H** | Usare un kit medico |
+| **F** | Attivare un mantello ottico |
 | **V** | Prima / terza persona |
 | **L** | Luce del Pip-Boy |
 | **F5 / F9** | Salvataggio / caricamento rapido |
 | **F11** | Schermo intero |
 | **ESC** | Pausa |
-
-Nello **S.P.A.T.**: `A/D` cambia bersaglio, `W/S` cambia parte del corpo, `E` o clic mette in
-coda un colpo, `INVIO` esegue.
 
 ## Compilare dai sorgenti
 
@@ -118,8 +145,9 @@ l'eseguibile Windows come artefatto ed esegue un test automatico.
 
 ### Test automatico
 
-`Dustfall --selftest` gioca da solo l'intera trama (dialoghi, combattimenti, bottino, tutte le
-missioni, salvataggio/caricamento e finale) e verifica che tutto funzioni.
+`Dustfall --selftest` gioca da solo l'intera trama (dialoghi, fotografie, esche, barattoli, essere
+scacciati, riparazioni, scale, terminali, tutte le otto missioni, svenimento, salvataggio/caricamento
+e finale) e verifica che tutto funzioni.
 `Dustfall --newgame --zone 0 --pos 0 60 --yaw 180 --time 15 --shot foto.png` scatta uno
 screenshot da una posizione qualsiasi.
 
@@ -132,12 +160,13 @@ screenshot da una posizione qualsiasi.
 | `src/render.cpp` | Shader di illuminazione e cielo, costruzione delle mesh |
 | `src/world.cpp` | Collisioni, raycast, terreno |
 | `src/world_build.cpp` | Generazione del mondo, luoghi, interni, PNG |
-| `src/entities.cpp` | Creature e PNG: IA, modelli animati, danni |
-| `src/player.cpp` | Giocatore, armi, visuale in prima persona |
-| `src/combat.cpp` | Effetti, granate, S.P.A.T., oggetti interattivi |
-| `src/quests.cpp` | Missioni, dialoghi, terminali |
+| `src/entities.cpp` | Creature e PNG: vista, udito, inseguimenti, distrazioni, modelli animati |
+| `src/player.cpp` | Giocatore, attrezzi, fotografia, visuale in prima persona |
+| `src/fx.cpp` | Effetti, oggetti lanciati, scanner del Pip-Boy |
+| `src/interact.cpp` | Oggetti interattivi: contenitori, porte, scale, riparazioni |
+| `src/quests.cpp` | Missioni, dialoghi, catalogo fotografico, terminali |
 | `src/pipboy.cpp` | Pip-Boy, inventario, baratto, saccheggio, livelli |
-| `src/menus.cpp` | Menu, creazione del personaggio, finale, opzioni |
+| `src/menus.cpp` | Menu, creazione del personaggio, svenimento, finale, opzioni |
 | `src/minigames.cpp` | Scasso e violazione dei terminali |
 | `src/audio.cpp` | Sintesi di effetti sonori, ambiente e radio |
 | `src/save.cpp` | Salvataggi e impostazioni |

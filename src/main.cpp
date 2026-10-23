@@ -864,6 +864,7 @@ int main(int argc, char** argv) {
             int items[][2] = {{I_CAMERA, 1}, {I_BAIT, 10}, {I_NOISE, 10}, {I_MEDKIT, 10}, {I_STEALTHBOY, 2}, {I_REPAIRKIT, 3}, {I_PARTS, 5}, {I_CAPS, 500}, {I_MEAT, 3}, {I_DARKCLOAK, 1}};
             for (auto& it : items) G.player.inv.Add(it[0], it[1]);
             EquipTool(TOOL_CAMERA);
+            G.player.photos = {"roach", "molerat", "deathclaw", "water_tower", "radio_tower", "atom_sign"};
             QUESTS[Q_MAIN].stage = 40;
             QUESTS[Q_ROACH].stage = 10;
             QUESTS[Q_PHOTO].stage = 10;
