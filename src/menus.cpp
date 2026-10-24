@@ -189,6 +189,15 @@ void CreateUpdate() {
         sCrSel = VerticalNav(sCrSel, n, sCrSel != 0); // mentre si scrive il nome W/S sono lettere
         for (int i = 0; i < n; i++)
             if (UIHover(Wd / 2 - 420, 150 + i * 46, 560, 40) && Vector2Length(GetMouseDelta()) > 0) sCrSel = i;
+        if (sCrSel == 0 && PlatformTouch()) {
+            // sul telefono il nome si scrive nella finestra con la tastiera del sistema
+            if (UIClicked(Wd / 2 - 420, 150 - 4, 560, 40) || Confirm()) PlatformAskText("nome", "Nome del personaggio", sCrName, 18);
+        }
+        std::string typed;
+        if (PlatformTakeText("nome", typed)) {
+            typed.erase(std::remove(typed.begin(), typed.end(), '|'), typed.end());
+            if (!typed.empty()) sCrName = typed; // la finestra limita già la lunghezza
+        }
         if (sCrSel == 0) {
             int ch = GetCharPressed();
             while (ch > 0) {
@@ -427,6 +436,7 @@ void PauseDraw() {
     for (int i = 0; i < 6; i++) MenuItem(items[i], Wd / 2, 250 + i * 54, 28, i == sMenuSel);
     UIText("WASD muovi · Mouse guarda · E interagisci · 1-4 attrezzi · Clic usa l'attrezzo · Clic destro zoom · Q scanner · TAB Pip-Boy", Wd / 2, 600, 16, PIP_DIM, 1);
     UIText("Shift corri · C accovacciati · Spazio salta · B esca · G barattolo · H kit medico · F mantello ottico · V visuale · L luce · F5/F9", Wd / 2, 624, 16, PIP_DIM, 1);
+    if (PlatformTouch()) UIText("Sul telefono: pollice sinistro per muoverti, dito a destra per guardare, pulsanti per tutto il resto.", Wd / 2, 576, 16, PIP, 1);
     if (NetAvailable()) UIText("Multigiocatore: T chat · Z saluta · P elenco dei giocatori · mappa del Pip-Boy per raggiungere un amico", Wd / 2, 648, 16, PIP_DIM, 1);
 }
 

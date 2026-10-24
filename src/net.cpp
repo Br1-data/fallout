@@ -60,7 +60,17 @@ EM_JS(int, js_net_rtt, (const char* id), { return DustfallNet.rtt(UTF8ToString(i
 EM_JS(void, js_net_set_room, (const char* r), { DustfallNet.setRoom(UTF8ToString(r)); });
 EM_JS(void, js_net_copy_invite, (), {
     var l = DustfallNet.inviteLink();
-    if (navigator.clipboard) navigator.clipboard.writeText(l).catch(function() {});
+    var copy = function() { if (navigator.clipboard) navigator.clipboard.writeText(l).catch(function() {}); };
+    // sul telefono si apre il menu Condividi (WhatsApp, Telegram...)
+    if (Module.dfTouch && navigator.share) navigator.share({title: 'Dustfall', text: 'Giochiamo insieme a Dustfall!', url: l}).catch(copy);
+    else copy();
+});
+EM_JS(char*, js_net_invite, (), {
+    var s = DustfallNet.inviteLink();
+    var n = lengthBytesUTF8(s) + 1;
+    var p = _malloc(n);
+    stringToUTF8(s, p, n);
+    return p;
 });
 
 static std::string TakeJsString(char* p) {
@@ -79,6 +89,13 @@ float NetLocalWave() { return sLocalWave; }
 static std::string NetRoom() {
 #if DUSTFALL_WEB
     if (sAvail) return TakeJsString(js_net_room());
+#endif
+    return "";
+}
+
+static std::string NetInvite() {
+#if DUSTFALL_WEB
+    if (sAvail) return TakeJsString(js_net_invite());
 #endif
     return "";
 }
@@ -252,6 +269,11 @@ void NetUpdate(float dt) {
     float st[12] = {(float)P.zone, P.pos.x, P.pos.y, P.pos.z, P.yaw, P.pitch, Vector3Length(V3(P.vel.x, 0, P.vel.z)), P.crouch ? 1.0f : 0.0f,
                     (float)P.tool, (float)sFlashN, (float)sWaveN, inGame ? 1.0f : 0.0f};
     js_net_state(st);
+    std::string typed;
+    if (PlatformTakeText("chat", typed) && !typed.empty()) {
+        js_net_chat(typed.c_str());
+        AddChat(G.player.name + ": " + typed, PIP);
+    }
     std::string events = TakeJsString(js_net_poll());
     if (!events.empty())
         for (auto& line : Split(events, '\n')) HandleEvent(line);
@@ -390,10 +412,11 @@ void NetDrawHud() {
     if (sStatus == 0) { st = "RETE DISATTIVATA"; sc = PIP_DIM; }
     else if (sStatus == 1) { st = "CONNESSIONE ALLA RETE..."; sc = Col(255, 220, 110); }
     else st = n == 0 ? "IN RETE  -  nessun altro viandante" : Fmt("IN RETE  -  %d %s", n, n == 1 ? "viandante" : "viandanti");
-    UIText(st, Wd - 16, 10, 15, ColAlpha(sc, 0.9f), 2);
-    if (G.state == GS_PLAY) UIText("T chat   Z saluta   P giocatori", Wd - 16, 30, 13, ColAlpha(PIP_DIM, 0.8f), 2);
+    if (PlatformTouch()) UIText(st, Wd / 2, 6, 15, ColAlpha(sc, 0.9f), 1); // in alto a destra ci sono i pulsanti
+    else UIText(st, Wd - 16, 10, 15, ColAlpha(sc, 0.9f), 2);
+    if (G.state == GS_PLAY && !PlatformTouch()) UIText("T chat   Z saluta   P giocatori", Wd - 16, 30, 13, ColAlpha(PIP_DIM, 0.8f), 2);
     if (sShowList && LocalInGame()) {
-        float px = Wd - 356, py = 52, h = 34 + std::max(1, n) * 24;
+        float px = PlatformTouch() ? Wd / 2 - 170 : Wd - 356, py = PlatformTouch() ? 28 : 52, h = 34 + std::max(1, n) * 24;
         UIRect(px, py, 340, h, Color{0, 0, 0, 150});
         UIRectLines(px, py, 340, h, 1, PIP_DIM);
         UIText("VIANDANTI NELLA STANZA", px + 12, py + 8, 15, PIP);
@@ -477,17 +500,28 @@ void OnlineUpdate() {
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) clicked = i;
         }
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) clicked = sOnSel;
+    std::string typed;
+    if (PlatformTakeText("stanza", typed) && !typed.empty()) {
+#if DUSTFALL_WEB
+        js_net_set_room(typed.c_str());
+#endif
+        sRemotes.clear();
+        AddChat("Sei entrato nella stanza \"" + NetRoom() + "\".", CHAT_SYS);
+    }
     if (clicked == 0) {
-        sEditRoom = true;
-        sRoomEdit = NetRoom();
-        while (GetCharPressed() > 0) {
+        if (PlatformTouch()) PlatformAskText("stanza", "Nome della stanza (lo stesso per te e i tuoi amici)", NetRoom(), 24);
+        else {
+            sEditRoom = true;
+            sRoomEdit = NetRoom();
+            while (GetCharPressed() > 0) {
+            }
         }
         PlaySfx(SFX_UI_OK);
     } else if (clicked == 1) {
 #if DUSTFALL_WEB
         js_net_copy_invite();
 #endif
-        Notify("Link di invito copiato: mandalo ai tuoi amici!");
+        Notify(PlatformTouch() ? "Manda il link ai tuoi amici!" : "Link di invito copiato: mandalo ai tuoi amici!");
         PlaySfx(SFX_UI_OK);
     } else if (clicked == 2) {
         PlaySfx(SFX_UI_BACK);
@@ -513,7 +547,8 @@ void OnlineDraw() {
     }
     std::string room = sEditRoom ? sRoomEdit + ((int)(G.time * 2) % 2 ? "_" : "") : NetRoom();
     UIText(room, x + 260, 230, 26, sEditRoom ? Col(255, 230, 140) : Color{220, 255, 225, 255});
-    UIText("copia il link negli appunti", x + 260, 284, 18, PIP_DIM);
+    UIText(PlatformTouch() ? "condividi il link" : "copia il link negli appunti", x + 260, 284, 18, PIP_DIM);
+    UIText(NetInvite(), Wd / 2, 340, 17, Col(255, 225, 150), 1);
     if (sEditRoom) UIText("Scrivi il nome della stanza e premi INVIO (ESC annulla)", Wd / 2, 380, 16, Col(255, 230, 140), 1);
     float y = 410;
     UIText("VIANDANTI COLLEGATI", x, y, 22, PIP);

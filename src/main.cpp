@@ -317,7 +317,7 @@ static void DrawFrame() {
             HudDraw();
             NetDrawHud();
 #if DUSTFALL_WEB
-            if (!PlatformPointerLocked() && G.fade == 0) {
+            if (!PlatformPointerLocked() && !PlatformTouch() && G.fade == 0) {
                 UIRect(UIW() / 2 - 250, 456, 500, 34, Color{0, 0, 0, 160});
                 UIText("Clicca per controllare la visuale con il mouse", UIW() / 2, 462, 19, PIP, 1);
             }
@@ -953,12 +953,25 @@ static void ApplyTestOpts() {
     if (!test.shot.empty() && test.state == GS_MENU) { G.state = GS_MENU; }
 }
 
+// comandi touch da mostrare in ogni schermata
+static int TouchModeFor(GameState s) {
+    switch (s) {
+        case GS_PLAY: return G.fade == 0 ? TM_PLAY : TM_NONE;
+        case GS_SCAN: return TM_SCAN;
+        case GS_LOCKPICK: return TM_LOCKPICK;
+        case GS_PIPBOY: return TM_PIPBOY;
+        case GS_CHAT: return TM_NONE;
+        default: return TM_MENU;
+    }
+}
+
 // un fotogramma di gioco; false quando il gioco deve terminare
 static bool MainFrame() {
     PlatformFrame();
     float dt = std::min(GetFrameTime(), 0.05f);
     if (!sTest.shot.empty()) dt = 1.0f / 30.0f;
     UpdateFrame(dt);
+    PlatformSetTouchMode(TouchModeFor(G.state));
     DrawFrame();
     sFrame++;
     if (!sTest.shot.empty() && sFrame >= sTest.frames) {
@@ -1002,7 +1015,8 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; i++)
         if (std::string(argv[i]) == "--selftest") sSelfTest = true;
     PlatformInit();
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
+    // sui telefoni niente MSAA: si disegna già ad alta densità
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | (PlatformTouch() ? 0 : FLAG_MSAA_4X_HINT));
 #if DUSTFALL_WEB
     // la tela riempie la finestra del browser (raylib la ridimensiona da sé)
     InitWindow(EM_ASM_INT({ return window.innerWidth; }), EM_ASM_INT({ return window.innerHeight; }), "Dustfall - Cronache delle Terre Bruciate");

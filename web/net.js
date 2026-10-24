@@ -271,7 +271,7 @@
             return out;
         },
         bye: function () { if (net.tr) { try { net.tr.send('by', 0); } catch (e) {} } },
-        debug: function () { return {kind: net.kind, room: net.roomName, status: api.status(), peers: JSON.parse(JSON.stringify(net.peers)), error: net.error}; }
+        debug: function () { return {kind: net.kind, room: net.roomName, status: api.status(), self: net.lastState, peers: JSON.parse(JSON.stringify(net.peers)), error: net.error}; }
     };
 
     window.addEventListener('pagehide', function () { api.bye(); });
