@@ -19,6 +19,11 @@ include(FetchContent)
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+if(EMSCRIPTEN)
+  # versione web: WebGL 2 (OpenGL ES 3.0)
+  set(PLATFORM "Web" CACHE STRING "" FORCE)
+  set(OPENGL_VERSION "ES 3.0" CACHE STRING "" FORCE)
+endif()
 FetchContent_Declare(
   raylib
   GIT_REPOSITORY https://github.com/raysan5/raylib.git
@@ -40,6 +45,25 @@ if(MSVC)
   target_compile_options(Dustfall PRIVATE /W3 /utf-8 /D_CRT_SECURE_NO_WARNINGS)
 else()
   target_compile_options(Dustfall PRIVATE -Wall -Wno-missing-field-initializers -Wno-unused-parameter)
+endif()
+
+if(EMSCRIPTEN)
+  # dustfall.js + dustfall.wasm, caricati da web/index.html
+  set_target_properties(Dustfall PROPERTIES OUTPUT_NAME "dustfall" SUFFIX ".js")
+  target_link_options(Dustfall PRIVATE
+    -sUSE_GLFW=3 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2
+    -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=268435456 -sSTACK_SIZE=8388608
+    -sENVIRONMENT=web -sEXIT_RUNTIME=0 -lidbfs.js
+    -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS,UTF8ToString,stringToUTF8,lengthBytesUTF8
+    -sEXPORTED_FUNCTIONS=_main,_malloc,_free)
+  # file statici del sito (pagina, rete, stile) accanto all'eseguibile
+  file(GLOB DUSTFALL_WEB_FILES ${CMAKE_SOURCE_DIR}/web/*)
+  list(APPEND DUSTFALL_WEB_FILES ${CMAKE_SOURCE_DIR}/assets/fonts/VT323-Regular.ttf)
+  foreach(f ${DUSTFALL_WEB_FILES})
+    get_filename_component(n ${f} NAME)
+    add_custom_command(TARGET Dustfall POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${f} $<TARGET_FILE_DIR:Dustfall>/${n})
+  endforeach()
 endif()
 
 if(WIN32)

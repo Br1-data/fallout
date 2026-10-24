@@ -1,11 +1,12 @@
 // Salvataggi e impostazioni.
 #include "game.h"
+#include "platform.h"
 #include <fstream>
 #include <sstream>
 
-static std::string SaveDir() { return std::string(GetApplicationDirectory()) + "saves/"; }
+static std::string SaveDir() { return DataDir() + "saves/"; }
 static std::string SlotPath(int slot) { return SaveDir() + Fmt("slot%d.sav", slot); }
-static std::string SettingsPath() { return std::string(GetApplicationDirectory()) + "settings.cfg"; }
+static std::string SettingsPath() { return DataDir() + "settings.cfg"; }
 
 bool SaveExists(int slot) { return FileExists(SlotPath(slot).c_str()); }
 long SaveTime(int slot) { return GetFileModTime(SlotPath(slot).c_str()); }
@@ -90,7 +91,9 @@ bool SaveGame(int slot) {
         WriteInv(o, v.inv);
     }
     o << gRadioStation << '\n';
-    return (bool)o;
+    o.close();
+    PlatformSyncStorage();
+    return !o.fail();
 }
 
 std::string SaveInfo(int slot) {
@@ -228,7 +231,9 @@ void SaveSettings() {
       << "fov " << s.fov << '\n'
       << "invertY " << s.invertY << '\n'
       << "showFps " << s.showFps << '\n'
-      << "fullscreen " << s.fullscreen << '\n';
+      << "fullscreen " << (DUSTFALL_WEB ? false : s.fullscreen) << '\n'; // nel browser lo schermo intero richiede un clic
+    o.close();
+    PlatformSyncStorage();
 }
 
 void LoadSettings() {
@@ -254,6 +259,5 @@ void LoadSettings() {
 
 void ApplySettings() {
     SetMasterVolume(G.settings.volume);
-    bool isFull = IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE);
-    if (G.settings.fullscreen != isFull) ToggleBorderlessWindowed();
+    if (G.settings.fullscreen != PlatformIsFullscreen()) PlatformSetFullscreen(G.settings.fullscreen);
 }

@@ -1,5 +1,7 @@
 // Menu e schermate: principale, introduzione, creazione, dialogo, pausa, svenimento, finale, riposo, salvataggi, opzioni.
 #include "game.h"
+#include "net.h"
+#include "platform.h"
 
 static int sMenuSel = 0;
 
@@ -41,31 +43,47 @@ static int NewestSave() {
     return best;
 }
 
+enum MainAction { MA_OPENWORLD, MA_STORY, MA_CONTINUE, MA_LOAD, MA_ONLINE, MA_OPTIONS, MA_QUIT };
+struct MainItem { const char* label; MainAction act; };
+
+static std::vector<MainItem> MainItems() {
+    std::vector<MainItem> v = {{"MONDO APERTO", MA_OPENWORLD}, {"NUOVA STORIA", MA_STORY}, {"CONTINUA", MA_CONTINUE}, {"CARICA PARTITA", MA_LOAD}};
+    if (NetAvailable()) v.push_back({"MULTIGIOCATORE", MA_ONLINE});
+    v.push_back({"OPZIONI", MA_OPTIONS});
+    if (!DUSTFALL_WEB) v.push_back({"ESCI", MA_QUIT}); // nel browser si chiude la scheda
+    return v;
+}
+
+static bool MainEnabled(const MainItem& it, bool hasSave) { return hasSave || (it.act != MA_CONTINUE && it.act != MA_LOAD); }
+static float MainY(int i) { return 350 + i * 48; }
+static bool sNewOpenWorld = false; // la creazione del personaggio porta al mondo aperto
+
 void MenuUpdate() {
-    const char* items[] = {"NUOVA PARTITA", "CONTINUA", "CARICA PARTITA", "OPZIONI", "ESCI"};
+    std::vector<MainItem> items = MainItems();
+    int n = (int)items.size();
     bool has = AnySave();
-    sMenuSel = VerticalNav(sMenuSel, 5);
-    if (!has && (sMenuSel == 1 || sMenuSel == 2)) sMenuSel = IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W) ? 0 : 3;
+    bool up = IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W);
+    sMenuSel = VerticalNav(sMenuSel % n, n);
+    for (int k = 0; k < n && !MainEnabled(items[sMenuSel], has); k++) sMenuSel = (sMenuSel + (up ? n - 1 : 1)) % n;
     int clicked = -1;
     float Wd = UIW();
-    for (int i = 0; i < 5; i++) {
-        bool en = has || (i != 1 && i != 2);
-        if (UIHover(Wd / 2 - 160, 380 + i * 52 - 4, 320, 40) && en) sMenuSel = i;
-        (void)items;
-    }
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && UIHover(Wd / 2 - 160, 380 + sMenuSel * 52 - 4, 320, 40)) clicked = sMenuSel;
+    for (int i = 0; i < n; i++)
+        if (UIHover(Wd / 2 - 160, MainY(i) - 4, 320, 40) && MainEnabled(items[i], has)) sMenuSel = i;
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && UIHover(Wd / 2 - 160, MainY(sMenuSel) - 4, 320, 40)) clicked = sMenuSel;
     if (Confirm()) clicked = sMenuSel;
-    switch (clicked) {
-        case 0: PlaySfx(SFX_UI_OK); SetGameState(GS_INTRO); break;
-        case 1: {
+    if (clicked < 0) return;
+    switch (items[clicked].act) {
+        case MA_OPENWORLD: PlaySfx(SFX_UI_OK); sNewOpenWorld = true; SetGameState(GS_CREATE); break;
+        case MA_STORY: PlaySfx(SFX_UI_OK); sNewOpenWorld = false; SetGameState(GS_INTRO); break;
+        case MA_CONTINUE: {
             int s = NewestSave();
             if (s >= 0 && LoadGame(s)) PlaySfx(SFX_UI_OK);
             break;
         }
-        case 2: PlaySfx(SFX_UI_OK); SaveLoadOpen(false, GS_MENU); break;
-        case 3: PlaySfx(SFX_UI_OK); OptionsOpen(GS_MENU); break;
-        case 4: G.quit = true; break;
-        default: break;
+        case MA_LOAD: PlaySfx(SFX_UI_OK); SaveLoadOpen(false, GS_MENU); break;
+        case MA_ONLINE: PlaySfx(SFX_UI_OK); OnlineOpen(GS_MENU); break;
+        case MA_OPTIONS: PlaySfx(SFX_UI_OK); OptionsOpen(GS_MENU); break;
+        case MA_QUIT: G.quit = true; break;
     }
 }
 
@@ -78,10 +96,13 @@ void MenuDraw() {
     UIText("DUSTFALL", Wd / 2, 120, 120, ColLerp(Col(255, 200, 110), Col(255, 230, 170), glow), 1);
     UIText("CRONACHE DELLE TERRE BRUCIATE", Wd / 2, 250, 28, Col(230, 200, 150), 1);
     UIRect(Wd / 2 - 260, 292, 520, 2, ColAlpha(Col(230, 200, 150), 0.6f));
-    const char* items[] = {"NUOVA PARTITA", "CONTINUA", "CARICA PARTITA", "OPZIONI", "ESCI"};
+    std::vector<MainItem> items = MainItems();
     bool has = AnySave();
-    for (int i = 0; i < 5; i++) MenuItem(items[i], Wd / 2, 380 + i * 52, 30, i == sMenuSel, has || (i != 1 && i != 2));
-    UIText("v2.0  -  Un'avventura post-apocalittica senza violenza", 20, 690, 15, ColAlpha(Col(230, 200, 150), 0.6f));
+    for (int i = 0; i < (int)items.size(); i++) MenuItem(items[i].label, Wd / 2, MainY(i), 30, i == sMenuSel, MainEnabled(items[i], has));
+    const char* hint = sMenuSel < (int)items.size() && items[sMenuSel].act == MA_OPENWORLD ? "Parti subito da Ferrocittà ed esplora liberamente: è qui che si incontrano gli altri giocatori."
+                       : sMenuSel < (int)items.size() && items[sMenuSel].act == MA_STORY ? "La storia completa: si comincia dentro il Rifugio 33, dal Sovrintendente." : "";
+    UIText(hint, Wd / 2, 655, 16, ColAlpha(Col(230, 200, 150), 0.75f), 1);
+    UIText(DUSTFALL_WEB ? "v2.1 web  -  Un'avventura post-apocalittica senza violenza, anche in compagnia" : "v2.1  -  Un'avventura post-apocalittica senza violenza", 20, 690, 15, ColAlpha(Col(230, 200, 150), 0.6f));
     UIText("Frecce/Mouse + INVIO", Wd - 20, 690, 15, ColAlpha(Col(230, 200, 150), 0.6f), 2);
 }
 
@@ -213,7 +234,7 @@ void CreateUpdate() {
             PlaySfx(SFX_UI_MOVE);
         } else if ((Confirm() || click) && sCrSel == SK_COUNT) {
             if (sCrTags < 3) { Notify("Contrassegna tre abilità.", Col(255, 200, 120)); PlaySfx(SFX_UI_BACK); return; }
-            NewGame();
+            NewGame(sNewOpenWorld);
             Player& P = G.player;
             P.name = sCrName;
             P.female = sCrFemale;
@@ -389,7 +410,10 @@ void PauseUpdate() {
         case 2: SaveLoadOpen(false, GS_PAUSE); break;
         case 3: OptionsOpen(GS_PAUSE); break;
         case 4: sMenuSel = 0; SetGameState(GS_MENU); break;
-        case 5: G.quit = true; break;
+        case 5:
+            if (NetAvailable()) OnlineOpen(GS_PAUSE);
+            else G.quit = true;
+            break;
         default: break;
     }
     if (clicked >= 0) PlaySfx(SFX_UI_OK);
@@ -399,10 +423,11 @@ void PauseDraw() {
     float Wd = UIW();
     UIRect(0, 0, Wd, 720, Color{0, 0, 0, 170});
     UIText("PAUSA", Wd / 2, 150, 56, PIP, 1);
-    const char* items[] = {"RIPRENDI", "SALVA PARTITA", "CARICA PARTITA", "OPZIONI", "MENU PRINCIPALE", "ESCI DAL GIOCO"};
+    const char* items[] = {"RIPRENDI", "SALVA PARTITA", "CARICA PARTITA", "OPZIONI", "MENU PRINCIPALE", NetAvailable() ? "MULTIGIOCATORE" : "ESCI DAL GIOCO"};
     for (int i = 0; i < 6; i++) MenuItem(items[i], Wd / 2, 250 + i * 54, 28, i == sMenuSel);
     UIText("WASD muovi · Mouse guarda · E interagisci · 1-4 attrezzi · Clic usa l'attrezzo · Clic destro zoom · Q scanner · TAB Pip-Boy", Wd / 2, 600, 16, PIP_DIM, 1);
     UIText("Shift corri · C accovacciati · Spazio salta · B esca · G barattolo · H kit medico · F mantello ottico · V visuale · L luce · F5/F9", Wd / 2, 624, 16, PIP_DIM, 1);
+    if (NetAvailable()) UIText("Multigiocatore: T chat · Z saluta · P elenco dei giocatori · mappa del Pip-Boy per raggiungere un amico", Wd / 2, 648, 16, PIP_DIM, 1);
 }
 
 // ---------------------------------------------------------------------------

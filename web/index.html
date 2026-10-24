@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dustfall - Terre Bruciate online</title>
+<meta name="description" content="Dustfall: avventura 3D open world post-apocalittica e senza violenza, giocabile nel browser e in multigiocatore.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='31' fill='%23282218'/%3E%3Ccircle cx='32' cy='32' r='27' fill='%23e1b428'/%3E%3Ccircle cx='32' cy='32' r='23' fill='%23284678'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23ff5a3c'/%3E%3C/svg%3E">
+<style>
+@font-face { font-family: "VT323"; src: url("VT323-Regular.ttf") format("truetype"); font-display: swap; }
+:root {
+  --pip: #50ff82; --pip-dim: #32aa55; --pip-dark: #144623; --bg: #061610; --sand: #e6c896; --amber: #ffe196;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #080705; color: var(--pip); }
+body { font-family: "VT323", ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 20px; }
+canvas#canvas { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; outline: none; background: #080705; }
+#overlay {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: radial-gradient(ellipse at center, rgba(10, 40, 22, 0.94), rgba(3, 10, 6, 0.98));
+  overflow: auto; z-index: 2;
+}
+#overlay::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
+}
+.panel { width: min(760px, 100%); text-align: center; position: relative; z-index: 1; }
+h1 { font-size: clamp(64px, 14vw, 128px); line-height: 0.9; margin: 0; color: #ffc86e; letter-spacing: 6px; text-shadow: 0 0 18px rgba(255, 180, 80, 0.35), 4px 4px 0 #000; font-weight: normal; }
+.sub { color: var(--sand); font-size: clamp(20px, 3.6vw, 28px); margin: 8px 0 24px; letter-spacing: 2px; }
+#status { min-height: 26px; color: var(--pip); }
+.bar { height: 10px; border: 1px solid var(--pip-dim); margin: 10px auto 20px; width: min(420px, 90%); }
+.bar > div { height: 100%; width: 0; background: var(--pip); transition: width 0.3s; }
+button#play {
+  font: inherit; font-size: 34px; letter-spacing: 4px; color: var(--bg); background: var(--pip); border: 0;
+  padding: 8px 46px; cursor: pointer; box-shadow: 0 0 22px rgba(80, 255, 130, 0.35);
+}
+button#play:disabled { background: var(--pip-dark); color: var(--pip-dim); cursor: wait; box-shadow: none; }
+button#play:not(:disabled):hover { background: #b4ffc8; }
+.room { margin: 18px 0 6px; color: var(--amber); }
+.room code { font-family: inherit; background: rgba(0, 0, 0, 0.35); padding: 0 6px; }
+.keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2px 20px; text-align: left; margin: 22px auto 10px; color: var(--pip-dim); font-size: 18px; }
+.keys b { color: var(--pip); font-weight: normal; display: inline-block; min-width: 92px; }
+.note { color: var(--pip-dim); font-size: 16px; max-width: 640px; margin: 10px auto 0; }
+.note a { color: var(--amber); }
+.error { color: #ff8a6a; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<div id="overlay">
+  <div class="panel">
+    <h1>DUSTFALL</h1>
+    <div class="sub">CRONACHE DELLE TERRE BRUCIATE &middot; ONLINE</div>
+    <div id="status">Caricamento del motore...</div>
+    <div class="bar"><div id="progress"></div></div>
+    <button id="play" disabled>GIOCA</button>
+    <div class="room">Stanza multigiocatore: <code id="room">pubblica</code></div>
+    <div class="note">Chi apre il gioco con lo stesso link (stessa stanza) si incontra nelle Terre Bruciate.
+      Per giocare solo con gli amici scegli una stanza dal menu <b>Multigiocatore</b> e condividi il link.</div>
+    <div class="keys">
+      <div><b>WASD</b> muoviti</div><div><b>Mouse</b> guardati intorno</div>
+      <div><b>E</b> interagisci, parla</div><div><b>Clic</b> scatta / lancia</div>
+      <div><b>TAB</b> Pip-Boy e mappa</div><div><b>Q</b> scanner</div>
+      <div><b>C</b> accovacciati</div><div><b>Shift</b> corri</div>
+      <div><b>T / Invio</b> chat</div><div><b>Z</b> saluta</div>
+      <div><b>P</b> elenco giocatori</div><div><b>F11</b> schermo intero</div>
+    </div>
+    <div class="note">Nessuna violenza: fotografa, nasconditi, distrai e ripara. I salvataggi restano in questo browser.
+      Serve un computer con tastiera, mouse e WebGL 2.</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var canvas = document.getElementById('canvas');
+  var overlay = document.getElementById('overlay');
+  var statusEl = document.getElementById('status');
+  var progress = document.getElementById('progress');
+  var playBtn = document.getElementById('play');
+  var started = false;
+
+  function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = cls || ''; }
+  function roomName() { return decodeURIComponent(location.hash.slice(1)) || 'pubblica'; }
+  document.getElementById('room').textContent = roomName();
+  window.addEventListener('hashchange', function () {
+    document.getElementById('room').textContent = roomName();
+    if (window.DustfallNet) DustfallNet.setRoom(roomName());
+  });
+
+  // --- requisiti
+  var gl2 = false;
+  try { gl2 = !!document.createElement('canvas').getContext('webgl2'); } catch (e) {}
+  if (!gl2) {
+    setStatus('Questo browser non supporta WebGL 2: prova con una versione recente di Chrome, Edge o Firefox.', 'error');
+    return;
+  }
+
+  // --- schermo intero (serve un gesto dell'utente)
+  function enterFullscreen() {
+    var el = document.documentElement;
+    if (document.fullscreenElement || !el.requestFullscreen) return;
+    el.requestFullscreen({navigationUI: 'hide'}).then(function () {
+      // in schermo intero ESC e Ctrl+W arrivano al gioco (Chrome/Edge)
+      if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(function () {});
+    }).catch(function () {});
+  }
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else enterFullscreen();
+  }
+  function gesture() {
+    if (window.Module && Module.dfWantFullscreen) { Module.dfWantFullscreen = false; enterFullscreen(); }
+  }
+  window.addEventListener('pointerup', gesture, true);
+  window.addEventListener('keyup', gesture, true);
+
+  // finché c'è la schermata iniziale i tasti non arrivano al gioco
+  ['keydown', 'keyup', 'keypress'].forEach(function (t) {
+    window.addEventListener(t, function (e) { if (!started) e.stopImmediatePropagation(); }, true);
+  });
+
+  // --- tasti che il browser userebbe per sé
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'F11') { e.preventDefault(); if (started) toggleFullscreen(); return; }
+    if (/^F([1-9]|10)$/.test(e.key) || e.key.indexOf('Arrow') === 0) e.preventDefault();
+    if ((e.ctrlKey || e.metaKey) && /^[sdfpghuo]$/i.test(e.key)) e.preventDefault();
+  }, true);
+  window.addEventListener('beforeunload', function (e) {
+    if (!started) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
+  // --- salvataggi in IndexedDB
+  var syncing = false, again = false;
+  function syncStorage() {
+    if (syncing) { again = true; return; }
+    syncing = true;
+    FS.syncfs(false, function (err) {
+      syncing = false;
+      if (err) console.warn('Salvataggio nel browser non riuscito', err);
+      if (again) { again = false; syncStorage(); }
+    });
+  }
+
+  var q = new URLSearchParams(location.search);
+  window.Module = {
+    canvas: canvas,
+    arguments: (q.get('args') || '').split(' ').filter(Boolean),
+    print: function (t) { console.log(t); },
+    printErr: function (t) { console.warn(t); },
+    preRun: [function () {
+      FS.mkdir('/dustfall');
+      FS.mount(IDBFS, {}, '/dustfall');
+      addRunDependency('salvataggi');
+      FS.syncfs(true, function (err) {
+        if (err) console.warn('Lettura dei salvataggi non riuscita', err);
+        removeRunDependency('salvataggi');
+      });
+    }],
+    monitorRunDependencies: function (left) { if (!left) progress.style.width = '60%'; },
+    onAbort: function (what) { setStatus('Errore: ' + what, 'error'); },
+    dfSyncStorage: syncStorage,
+    dfStatus: function (t) { setStatus(t); progress.style.width = '80%'; },
+    dfReady: function () {
+      progress.style.width = '100%';
+      setStatus('Le Terre Bruciate ti aspettano.');
+      playBtn.disabled = false;
+      playBtn.focus();
+      if (q.get('autoplay') !== null) start();
+    },
+    dfTestDone: function (rc) { window.dfTestResult = rc; }
+  };
+  progress.style.width = '20%';
+
+  function start() {
+    if (started) return;
+    started = true;
+    overlay.style.display = 'none';
+    canvas.focus();
+  }
+  playBtn.addEventListener('click', start);
+  window.addEventListener('error', function (e) {
+    if (!started) setStatus('Errore durante il caricamento: ' + e.message, 'error');
+  });
+})();
+</script>
+<script src="trystero.min.js"></script>
+<script src="net.js"></script>
+<script src="dustfall.js" async></script>
+</body>
+</html>

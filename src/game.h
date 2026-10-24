@@ -566,7 +566,8 @@ extern const Color PIP_BG;
 // ============================================================================
 enum GameState {
     GS_MENU, GS_INTRO, GS_CREATE, GS_PLAY, GS_PIPBOY, GS_DIALOGUE, GS_BARTER, GS_LOOT, GS_LOCKPICK,
-    GS_TERMINAL, GS_SCAN, GS_PAUSE, GS_LEVELUP, GS_FAINT, GS_ENDING, GS_SLEEP, GS_SAVELOAD, GS_OPTIONS
+    GS_TERMINAL, GS_SCAN, GS_PAUSE, GS_LEVELUP, GS_FAINT, GS_ENDING, GS_SLEEP, GS_SAVELOAD, GS_OPTIONS,
+    GS_CHAT, GS_ONLINE // multigiocatore (solo nel browser)
 };
 
 struct Settings {
@@ -627,7 +628,7 @@ struct Game {
 extern Game G;
 
 // --- funzioni di gioco (definite nei vari moduli) ---
-void NewGame();
+void NewGame(bool openWorld = false); // mondo aperto: si parte già fuori, a Ferrocittà
 void ResetDynamicWorld();
 void ChangeZone(int zone, Vector3 pos, float yaw);
 void PlayerUpdate(float dt);
