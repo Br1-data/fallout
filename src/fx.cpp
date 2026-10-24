@@ -1,5 +1,6 @@
 // Effetti visivi, oggetti lanciati (esche e barattoli rumorosi) e scanner del Pip-Boy.
 #include "game.h"
+#include "platform.h"
 
 static std::vector<Particle> sParts;
 static std::vector<Throwable> sThrown;
@@ -233,7 +234,7 @@ void ScanEnter() {
 void ScanUpdate(float dt) {
     Player& P = G.player;
     sScanT += dt;
-    Vector2 md = GetMouseDelta();
+    Vector2 md = LookDelta();
     if (G.mouseSkip > 0) { G.mouseSkip--; md = V2(0, 0); }
     float sens = 0.0022f * G.settings.sensitivity;
     P.yaw = AngleWrap(P.yaw - md.x * sens);

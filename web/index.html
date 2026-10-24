@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Dustfall - Terre Bruciate online</title>
+<meta name="description" content="Dustfall: avventura 3D open world post-apocalittica e senza violenza, giocabile nel browser, da telefono e in multigiocatore.">
+<meta name="theme-color" content="#080705">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dustfall">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+@font-face { font-family: "VT323"; src: url("VT323-Regular.ttf") format("truetype"); font-display: swap; }
+:root {
+  --pip: #50ff82; --pip-dim: #32aa55; --pip-dark: #144623; --bg: #061610; --sand: #e6c896; --amber: #ffe196;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #080705; color: var(--pip); overscroll-behavior: none; }
+body { font-family: "VT323", ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 20px; }
+canvas#canvas { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; outline: none; background: #080705; touch-action: none; }
+
+/* --- schermata iniziale --- */
+#overlay {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: radial-gradient(ellipse at center, rgba(10, 40, 22, 0.94), rgba(3, 10, 6, 0.98));
+  overflow: auto; z-index: 3;
+}
+#overlay::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
+}
+.panel { width: min(760px, 100%); text-align: center; position: relative; z-index: 1; margin: auto; }
+h1 { font-size: clamp(56px, 14vw, 128px); line-height: 0.9; margin: 0; color: #ffc86e; letter-spacing: 6px; text-shadow: 0 0 18px rgba(255, 180, 80, 0.35), 4px 4px 0 #000; font-weight: normal; }
+.sub { color: var(--sand); font-size: clamp(18px, 3.6vw, 28px); margin: 8px 0 18px; letter-spacing: 2px; }
+#status { min-height: 26px; color: var(--pip); }
+.bar { height: 10px; border: 1px solid var(--pip-dim); margin: 10px auto 18px; width: min(420px, 90%); }
+.bar > div { height: 100%; width: 0; background: var(--pip); transition: width 0.3s; }
+button { font: inherit; cursor: pointer; }
+button#play {
+  font-size: 34px; letter-spacing: 4px; color: var(--bg); background: var(--pip); border: 0;
+  padding: 8px 46px; box-shadow: 0 0 22px rgba(80, 255, 130, 0.35);
+}
+button#play:disabled { background: var(--pip-dark); color: var(--pip-dim); cursor: wait; box-shadow: none; }
+button#play:not(:disabled):hover { background: #b4ffc8; }
+.room { margin: 18px auto 4px; color: var(--amber); max-width: 640px; }
+.room code { font-family: inherit; background: rgba(0, 0, 0, 0.35); padding: 0 6px; }
+.room button, .share button { font-size: 20px; background: transparent; color: var(--amber); border: 1px solid var(--amber); padding: 2px 14px; margin: 6px 4px 0; }
+.room button:hover, .share button:hover { background: rgba(255, 225, 150, 0.15); }
+.share { display: none; margin: 8px auto 0; max-width: 640px; color: var(--sand); font-size: 18px; }
+.share.open { display: block; }
+.share input { width: 100%; font: inherit; font-size: 18px; color: var(--amber); background: rgba(0, 0, 0, 0.5); border: 1px solid var(--pip-dark); padding: 4px 8px; margin-top: 6px; }
+.keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2px 20px; text-align: left; margin: 20px auto 10px; color: var(--pip-dim); font-size: 18px; }
+.keys b { color: var(--pip); font-weight: normal; display: inline-block; min-width: 92px; }
+.note { color: var(--pip-dim); font-size: 16px; max-width: 640px; margin: 10px auto 0; }
+.error { color: #ff8a6a; }
+.only-touch, .only-ios { display: none; }
+html.touch .only-touch { display: block; }
+html.touch .keys.only-touch { display: grid; }
+html.touch .only-mouse { display: none; }
+html.ios .only-ios { display: block; }
+@media (max-height: 520px) {
+  h1 { font-size: 56px; }
+  .sub { margin-bottom: 8px; }
+  .bar { margin: 6px auto 10px; }
+  .keys { margin-top: 10px; font-size: 16px; }
+}
+
+/* --- comandi touch --- */
+#touch { position: fixed; inset: 0; z-index: 1; pointer-events: none; display: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+html.touch.started #touch { display: block; }
+#touch > div, #touch .tb { touch-action: none; }
+#t-move, #t-look { position: absolute; display: none; pointer-events: auto; }
+#t-move { left: 0; top: 18%; width: 42%; bottom: 0; }
+#t-look { left: 42%; top: 0; right: 0; bottom: 0; }
+#touch.mode-play #t-move, #touch.mode-play #t-look, #touch.mode-scan #t-look, #touch.mode-pick #t-look { display: block; }
+#touch.mode-scan #t-look, #touch.mode-pick #t-look { left: 0; }
+#t-stick { position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%; border: 2px solid rgba(80, 255, 130, 0.5); background: rgba(10, 40, 20, 0.3); display: none; }
+#t-stick.on { display: block; }
+#t-stick div { position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; border-radius: 50%; background: rgba(80, 255, 130, 0.45); transform: translate(-50%, -50%); }
+#touch .tb {
+  position: absolute; display: none; align-items: center; justify-content: center; pointer-events: auto;
+  font-family: inherit; color: #d8ffe3; background: rgba(8, 36, 18, 0.5); border: 2px solid rgba(80, 255, 130, 0.55);
+  padding: 0; line-height: 1; text-shadow: 0 1px 2px #000;
+}
+#touch .tb.on { background: rgba(80, 255, 130, 0.4); }
+#touch.mode-play .tb.play, #touch.mode-scan .tb.scan, #touch.mode-pick .tb.pick, #touch.mode-menu .tb.menu, #touch.mode-pip .tb.pip { display: flex; }
+#touch .tb.big { width: clamp(72px, 23vh, 130px); height: clamp(72px, 23vh, 130px); border-radius: 50%; font-size: clamp(20px, 5.5vh, 30px); right: calc(3vw + env(safe-area-inset-right)); bottom: 17vh; }
+#touch .tb.mid { width: clamp(48px, 14vh, 84px); height: clamp(48px, 14vh, 84px); border-radius: 50%; font-size: clamp(15px, 3.6vh, 22px); }
+#touch .tb.act { right: calc(3vw + 27vh + env(safe-area-inset-right)); bottom: 9vh; font-size: clamp(22px, 6vh, 34px); }
+#touch .tb.crouch { right: calc(3vw + 25vh + env(safe-area-inset-right)); bottom: 26vh; }
+#touch .tb.jump { right: calc(3vw + 4.5vh + env(safe-area-inset-right)); bottom: 43vh; }
+#touch .tb.zoom { right: calc(3vw + 20vh + env(safe-area-inset-right)); bottom: 42vh; }
+#touch .tb.close { right: calc(3vw + env(safe-area-inset-right)); top: 4vh; }
+#touch .tb.pick.close { top: auto; bottom: 46vh; }
+#touch .tb.sm { width: clamp(60px, 17vh, 100px); height: clamp(30px, 8.6vh, 46px); border-radius: 8px; font-size: clamp(13px, 3.1vh, 18px); }
+#touch .tb.r0 { top: calc(2vh + env(safe-area-inset-top)); } #touch .tb.r1 { top: calc(11.5vh + env(safe-area-inset-top)); }
+#touch .tb.r2 { top: calc(21vh + env(safe-area-inset-top)); } #touch .tb.r3 { top: calc(30.5vh + env(safe-area-inset-top)); }
+#touch .tb.r4 { top: calc(40vh + env(safe-area-inset-top)); }
+#touch .tb.c0 { right: calc(1.5vw + env(safe-area-inset-right)); } #touch .tb.c1 { right: calc(1.5vw + 18.5vh + env(safe-area-inset-right)); }
+#touch .tb.c2 { right: calc(1.5vw + 37vh + env(safe-area-inset-right)); }
+#touch .tb.pad { width: clamp(44px, 12vh, 70px); height: clamp(44px, 12vh, 70px); border-radius: 10px; font-size: clamp(16px, 4vh, 24px); background: rgba(8, 36, 18, 0.35); }
+#touch .tb.pu { left: calc(2vh + 13vh + env(safe-area-inset-left)); bottom: calc(3vh + 26vh); }
+#touch .tb.pd { left: calc(2vh + 13vh + env(safe-area-inset-left)); bottom: 3vh; }
+#touch .tb.pl { left: calc(2vh + env(safe-area-inset-left)); bottom: calc(3vh + 13vh); }
+#touch .tb.pr { left: calc(2vh + 26vh + env(safe-area-inset-left)); bottom: calc(3vh + 13vh); }
+#touch .tb.ok { right: calc(2vh + env(safe-area-inset-right)); bottom: calc(3vh + 13vh); width: clamp(64px, 18vh, 110px); }
+#touch .tb.back { right: calc(2vh + env(safe-area-inset-right)); bottom: 3vh; width: clamp(64px, 18vh, 110px); font-size: clamp(13px, 3.2vh, 18px); }
+#touch .tb.tl, #touch .tb.tr { bottom: 3vh; width: clamp(64px, 18vh, 110px); font-size: clamp(12px, 3vh, 17px); }
+#touch .tb.tl { left: calc(42vh + env(safe-area-inset-left)); }
+#touch .tb.tr { left: calc(62vh + env(safe-area-inset-left)); }
+
+/* --- finestra per scrivere --- */
+#textbox { display: none; position: fixed; left: 50%; top: max(8px, env(safe-area-inset-top)); transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); z-index: 6; background: rgba(6, 22, 12, 0.97); border: 2px solid var(--pip); padding: 12px; box-shadow: 0 6px 30px rgba(0, 0, 0, 0.6); }
+#textbox.open { display: block; }
+#textbox label { display: block; margin-bottom: 8px; }
+#textbox input { width: 100%; font: inherit; font-size: 22px; background: #000; color: #dcffe6; border: 1px solid var(--pip-dim); padding: 6px 8px; }
+.tb-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; }
+.tb-row button { font-size: 20px; padding: 4px 18px; background: var(--pip-dark); color: var(--pip); border: 1px solid var(--pip-dim); }
+.tb-row #tb-ok { background: var(--pip); color: var(--bg); }
+
+/* --- telefono in verticale --- */
+#rotate { display: none; position: fixed; inset: 0; z-index: 5; background: #061610; color: var(--pip); align-items: center; justify-content: center; text-align: center; font-size: 28px; padding: 24px; }
+@media (orientation: portrait) { html.touch.started #rotate { display: flex; } }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<div id="overlay">
+  <div class="panel">
+    <h1>DUSTFALL</h1>
+    <div class="sub">CRONACHE DELLE TERRE BRUCIATE &middot; ONLINE</div>
+    <div id="status">Caricamento del motore...</div>
+    <div class="bar"><div id="progress"></div></div>
+    <button id="play" disabled>GIOCA</button>
+    <div class="room">
+      <div id="room-line">Stanza: <code id="room">pubblica</code> &middot; chi è nella stessa stanza si incontra nelle Terre Bruciate.</div>
+      <button id="friend" type="button">Gioca con un amico</button>
+    </div>
+    <div class="share" id="share">
+      <div>Manda questo link al tuo amico: aprendolo entrerà nella tua stanza.</div>
+      <input id="share-link" readonly>
+      <button id="share-btn" type="button">Condividi il link</button>
+      <button id="copy-btn" type="button">Copia</button>
+      <span id="copied"></span>
+    </div>
+    <div class="keys only-mouse">
+      <div><b>WASD</b> muoviti</div><div><b>Mouse</b> guardati intorno</div>
+      <div><b>E</b> interagisci, parla</div><div><b>Clic</b> scatta / lancia</div>
+      <div><b>TAB</b> Pip-Boy e mappa</div><div><b>Q</b> scanner</div>
+      <div><b>C</b> accovacciati</div><div><b>Shift</b> corri</div>
+      <div><b>T / Invio</b> chat</div><div><b>Z</b> saluta</div>
+      <div><b>P</b> elenco giocatori</div><div><b>F11</b> schermo intero</div>
+    </div>
+    <div class="keys only-touch">
+      <div><b>Pollice sinistro</b> muoviti (spingi oltre il cerchio per correre)</div>
+      <div><b>Dito a destra</b> guardati intorno</div>
+      <div><b>USA</b> scatta / lancia</div><div><b>E</b> interagisci, parla</div>
+      <div><b>PIP-BOY</b> mappa e inventario</div><div><b>CHAT</b> scrivi agli amici</div>
+    </div>
+    <div class="note only-ios">Su iPhone, per giocare a schermo intero: Condividi &rarr; <b>Aggiungi alla schermata Home</b>, poi apri Dustfall dall'icona.</div>
+    <div class="note">Nessuna violenza: fotografa, nasconditi, distrai e ripara. I salvataggi restano in questo browser.</div>
+  </div>
+</div>
+<div id="rotate">Gira il telefono in orizzontale per giocare.</div>
+
+<script>
+(function () {
+  'use strict';
+  var canvas = document.getElementById('canvas');
+  var overlay = document.getElementById('overlay');
+  var statusEl = document.getElementById('status');
+  var progress = document.getElementById('progress');
+  var playBtn = document.getElementById('play');
+  var started = false;
+  var root = document.documentElement;
+  var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var standalone = (window.matchMedia && matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) || navigator.standalone;
+  if (isIOS && !standalone) root.classList.add('ios');
+
+  function setStatus(t, cls) { statusEl.textContent = t; statusEl.className = cls || ''; }
+
+  // --- stanza multigiocatore (dal link: ...#nome-stanza)
+  function roomName() { try { return decodeURIComponent(location.hash.slice(1)) || 'pubblica'; } catch (e) { return 'pubblica'; } }
+  function inviteLink() { return window.DustfallNet ? DustfallNet.inviteLink() : location.href; }
+  function showRoom() {
+    var r = roomName();
+    document.getElementById('room').textContent = r;
+    document.getElementById('share-link').value = inviteLink();
+    if (r !== 'pubblica') {
+      document.getElementById('friend').textContent = 'Invita un altro amico';
+      document.getElementById('share').classList.add('open');
+    }
+  }
+  window.addEventListener('hashchange', function () {
+    if (window.DustfallNet) DustfallNet.setRoom(roomName());
+    showRoom();
+  });
+  document.getElementById('friend').addEventListener('click', function () {
+    if (roomName() === 'pubblica') {
+      var c = 'abcdefghjkmnpqrstuvwxyz23456789', id = '', b = new Uint8Array(6);
+      (window.crypto || window.msCrypto).getRandomValues(b);
+      for (var i = 0; i < b.length; i++) id += c[b[i] % c.length];
+      location.hash = 'tana-' + id; // hashchange cambia la stanza
+    }
+    document.getElementById('share').classList.add('open');
+    showRoom();
+  });
+  function copyLink() {
+    var input = document.getElementById('share-link');
+    var done = function () { document.getElementById('copied').textContent = ' Copiato!'; };
+    if (navigator.clipboard) navigator.clipboard.writeText(input.value).then(done, function () { input.select(); });
+    else { input.select(); try { document.execCommand('copy'); done(); } catch (e) {} }
+  }
+  document.getElementById('copy-btn').addEventListener('click', copyLink);
+  var shareBtn = document.getElementById('share-btn');
+  if (!navigator.share) shareBtn.style.display = 'none';
+  shareBtn.addEventListener('click', function () {
+    navigator.share({title: 'Dustfall', text: 'Giochiamo insieme a Dustfall nelle Terre Bruciate!', url: inviteLink()}).catch(function () {});
+  });
+  showRoom();
+
+  // --- requisiti
+  var gl2 = false;
+  try { gl2 = !!document.createElement('canvas').getContext('webgl2'); } catch (e) {}
+  if (!gl2) {
+    setStatus('Questo browser non supporta WebGL 2: aggiornalo, oppure prova con Chrome, Edge, Firefox o Safari recenti.', 'error');
+    return;
+  }
+
+  // --- schermo intero (serve un gesto dell'utente)
+  function enterFullscreen() {
+    var el = document.documentElement;
+    var req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (document.fullscreenElement || document.webkitFullscreenElement || !req) return;
+    var p = req.call(el, {navigationUI: 'hide'});
+    if (p && p.then) p.then(function () {
+      // in schermo intero ESC e Ctrl+W arrivano al gioco (Chrome/Edge); sui telefoni si blocca l'orizzontale
+      if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(function () {});
+      if (root.classList.contains('touch') && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {});
+    }).catch(function () {});
+  }
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else enterFullscreen();
+  }
+  function gesture() {
+    if (window.Module && Module.dfWantFullscreen) { Module.dfWantFullscreen = false; enterFullscreen(); }
+  }
+  window.addEventListener('pointerup', gesture, true);
+  window.addEventListener('keyup', gesture, true);
+
+  // i tasti non arrivano al gioco finché c'è la schermata iniziale o si scrive in un campo di testo
+  ['keydown', 'keyup', 'keypress'].forEach(function (t) {
+    window.addEventListener(t, function (e) {
+      var tag = e.target && e.target.tagName;
+      if (!started || tag === 'INPUT' || tag === 'TEXTAREA') e.stopImmediatePropagation();
+    }, true);
+  });
+
+  // --- tasti che il browser userebbe per sé
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'F11') { e.preventDefault(); toggleFullscreen(); return; }
+    if (/^F([1-9]|10)$/.test(e.key) || e.key.indexOf('Arrow') === 0) e.preventDefault();
+    if ((e.ctrlKey || e.metaKey) && /^[sdfpghuo]$/i.test(e.key)) e.preventDefault();
+  }, true);
+  window.addEventListener('beforeunload', function (e) {
+    if (!started) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); }); // niente zoom con due dita su iOS
+
+  // --- salvataggi in IndexedDB
+  var syncing = false, again = false;
+  function syncStorage() {
+    if (syncing) { again = true; return; }
+    syncing = true;
+    FS.syncfs(false, function (err) {
+      syncing = false;
+      if (err) console.warn('Salvataggio nel browser non riuscito', err);
+      if (again) { again = false; syncStorage(); }
+    });
+  }
+
+  var q = new URLSearchParams(location.search);
+  window.Module = {
+    canvas: canvas,
+    arguments: (q.get('args') || '').split(' ').filter(Boolean),
+    print: function (t) { console.log(t); },
+    printErr: function (t) { console.warn(t); },
+    preRun: [function () {
+      FS.mkdir('/dustfall');
+      FS.mount(IDBFS, {}, '/dustfall');
+      addRunDependency('salvataggi');
+      FS.syncfs(true, function (err) {
+        if (err) console.warn('Lettura dei salvataggi non riuscita', err);
+        removeRunDependency('salvataggi');
+      });
+    }],
+    monitorRunDependencies: function (left) { if (!left) progress.style.width = '60%'; },
+    onAbort: function (what) { setStatus('Errore: ' + what, 'error'); },
+    dfSyncStorage: syncStorage,
+    dfStatus: function (t) { setStatus(t); progress.style.width = '80%'; },
+    dfReady: function () {
+      progress.style.width = '100%';
+      setStatus('Le Terre Bruciate ti aspettano.');
+      playBtn.disabled = false;
+      showRoom();
+      if (q.get('autoplay') !== null) start();
+    },
+    dfTestDone: function (rc) { window.dfTestResult = rc; }
+  };
+  progress.style.width = '20%';
+
+  function start() {
+    if (started) return;
+    started = true;
+    root.classList.add('started');
+    overlay.style.display = 'none';
+    canvas.focus();
+    if (root.classList.contains('touch') && q.get('autoplay') === null) enterFullscreen();
+  }
+  playBtn.addEventListener('click', start);
+  window.addEventListener('error', function (e) {
+    if (!started) setStatus('Errore durante il caricamento: ' + e.message, 'error');
+  });
+})();
+</script>
+<script src="touch.js"></script>
+<script src="trystero.min.js"></script>
+<script src="net.js"></script>
+<script src="dustfall.js" async></script>
+</body>
+</html>

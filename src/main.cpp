@@ -1,6 +1,14 @@
 // DUSTFALL - Cronache delle Terre Bruciate
 // Punto d'ingresso, ciclo principale, ciclo giorno/notte e transizioni tra zone.
 #include "game.h"
+#include "platform.h"
+#include "net.h"
+
+#include <random>
+
+#if DUSTFALL_WEB
+#include <emscripten/emscripten.h>
+#endif
 
 Game G;
 
@@ -14,7 +22,7 @@ void SetGameState(GameState s) {
     } else if (IsCursorHidden()) EnableCursor();
 }
 
-void NewGame() {
+void NewGame(bool openWorld) {
     G.player = Player();
     Player& P = G.player;
     P.zone = ZONE_VAULT;
@@ -39,6 +47,32 @@ void NewGame() {
     QUESTS[Q_MAIN].stage = 10;
     G.gameStarted = true;
     SetGameState(GS_PLAY);
+    if (openWorld) {
+        // Mondo aperto: il Sovrintendente ha già affidato la missione e l'equipaggiamento;
+        // si parte alle porte di Ferrocittà, dove si ritrovano anche gli altri giocatori.
+        G.flags["open_world"] = 1;
+        G.flags["vault_opened"] = 1;
+        if (Interactable* door = FindInterByTag("vault_door_in")) door->open = true;
+        int kit[][2] = {{I_CAMERA, 1}, {I_BAIT, 3}, {I_NOISE, 3}, {I_MEDKIT, 3}, {I_RADAWAY, 1}, {I_BOBBYPIN, 4}, {I_REPAIRKIT, 1}, {I_PARTS, 1}, {I_CAPS, 60}};
+        for (auto& k : kit) P.inv.Add(k[0], k[1]);
+        EquipTool(TOOL_CAMERA);
+        QUESTS[Q_MAIN].stage = 20;
+        if (W.locations.size() > 1) {
+            W.locations[0].discovered = true; // il Rifugio 33
+            Location& town = W.locations[1];
+            town.discovered = true;           // si parte alle sue porte: è già sulla mappa per il viaggio rapido
+            // ognuno parte in un punto un po' diverso, così i giocatori non nascono uno dentro l'altro
+            std::random_device rd;
+            float a = (rd() % 3600) * 0.1f * DEG2RAD, d = 1.5f + (rd() % 300) * 0.01f;
+            Vector3 spawn = town.travelPos + V3(sinf(a) * d, 0, cosf(a) * d);
+            ChangeZone(ZONE_WASTE, spawn, AngleTo(spawn, town.pos));
+        }
+        G.messages.clear();
+        Notify("Mondo aperto: le Terre Bruciate sono tue. Vai dove vuoi!", Col(255, 230, 140));
+        Notify("Il Rifugio 33 ha bisogno di una cella di fusione: chiedi a Ferrocittà.", Col(200, 230, 200));
+        Notify("TAB apre il Pip-Boy, Q lo scanner. ESC mette in pausa.", Col(200, 230, 200));
+        return;
+    }
     Notify("Parla con il Sovrintendente: guardalo e premi E.", Col(255, 230, 140));
     Notify("TAB apre il Pip-Boy, Q lo scanner. ESC mette in pausa.", Col(200, 230, 200));
 }
@@ -123,15 +157,26 @@ static void AdvanceTime(float dt) {
 
 static void UpdateFrame(float rdt) {
     G.time += rdt;
+    NetUpdate(rdt);
     for (auto& m : G.messages) m.t -= rdt;
     G.messages.erase(std::remove_if(G.messages.begin(), G.messages.end(), [](const Message& m) { return m.t <= 0; }), G.messages.end());
     if (G.bigMsgT > 0) G.bigMsgT -= rdt;
 
+#if DUSTFALL_WEB
+    // F11 è gestito dalla pagina (serve un gesto dell'utente); qui si segue lo stato reale
+    G.settings.fullscreen = PlatformIsFullscreen();
+    // ESC nel browser sblocca il puntatore senza arrivare al gioco: equivale alla pausa
+    static bool sWasLocked = false;
+    bool locked = PlatformPointerLocked();
+    if (sWasLocked && !locked && G.state == GS_PLAY && G.fade == 0) SetGameState(GS_PAUSE);
+    sWasLocked = locked;
+#else
     if (IsKeyPressed(KEY_F11)) {
         G.settings.fullscreen = !G.settings.fullscreen;
         ApplySettings();
         SaveSettings();
     }
+#endif
 
     // transizione tra zone (dissolvenza)
     if (G.fade > 0) {
@@ -171,6 +216,7 @@ static void UpdateFrame(float rdt) {
                 else if (SaveGame(6)) Notify("Salvataggio rapido completato.");
             }
             if (IsKeyPressed(KEY_F9) && SaveExists(6)) { LoadGame(6); break; }
+            if (NetPlayKeys()) break;
             PlayerUpdate(rdt);
             if (G.state != GS_PLAY) { UpdateCamera3D(); break; }
             WorldTick(rdt);
@@ -202,6 +248,15 @@ static void UpdateFrame(float rdt) {
         }
         case GS_SAVELOAD: SaveLoadUpdate(); break;
         case GS_OPTIONS: OptionsUpdate(); break;
+        case GS_CHAT:
+            // mentre si scrive il mondo va avanti (è una partita in compagnia)
+            ChatUpdate();
+            WorldTick(rdt);
+            QuestsUpdate(rdt);
+            AdvanceTime(rdt);
+            UpdateCamera3D();
+            break;
+        case GS_ONLINE: OnlineUpdate(); break;
     }
     AudioUpdate(rdt);
 }
@@ -250,6 +305,7 @@ static void DrawWorld() {
     rlDrawRenderBatchActive();
     DrawSigns(zone, cam);
     EntitiesDrawShadows(cam);
+    NetDraw3D(cam);
     FxDraw(cam);
     if (G.state == GS_PLAY || G.state == GS_LOOT) DrawViewModel();
     EndMode3D();
@@ -261,10 +317,19 @@ static void DrawFrame() {
     if (!opaque2D) DrawWorld();
     else ClearBackground(BLACK);
     switch (G.state) {
-        case GS_MENU: MenuDraw(); break;
+        case GS_MENU: MenuDraw(); NetDrawHud(); break;
         case GS_INTRO: IntroDraw(); break;
         case GS_CREATE: CreateDraw(); break;
-        case GS_PLAY: HudDraw(); break;
+        case GS_PLAY:
+            HudDraw();
+            NetDrawHud();
+#if DUSTFALL_WEB
+            if (!PlatformPointerLocked() && !PlatformTouch() && G.fade == 0) {
+                UIRect(UIW() / 2 - 250, 456, 500, 34, Color{0, 0, 0, 160});
+                UIText("Clicca per controllare la visuale con il mouse", UIW() / 2, 462, 19, PIP, 1);
+            }
+#endif
+            break;
         case GS_SCAN: HudDraw(); ScanDraw(); break;
         case GS_PIPBOY: PipBoyDraw(); break;
         case GS_DIALOGUE: DialogueDraw(); break;
@@ -279,6 +344,8 @@ static void DrawFrame() {
         case GS_SLEEP: SleepDraw(); break;
         case GS_SAVELOAD: SaveLoadDraw(); break;
         case GS_OPTIONS: OptionsDraw(); break;
+        case GS_CHAT: HudDraw(); NetDrawHud(); break;
+        case GS_ONLINE: OnlineDraw(); break;
     }
     UIDrawMessages();
     float fa = G.fade > 0 ? G.fade : -G.fade;
@@ -286,6 +353,7 @@ static void DrawFrame() {
     EndDrawing();
 }
 
+#if !DUSTFALL_WEB
 static Image MakeIcon() {
     const int S = 64;
     Image img = GenImageColor(S, S, BLANK);
@@ -305,6 +373,7 @@ static Image MakeIcon() {
     ImageDrawCircle(&img, S / 2, S / 2, 5, Col(255, 90, 60));
     return img;
 }
+#endif
 
 
 // ---------------------------------------------------------------------------
@@ -645,6 +714,7 @@ static int RunSelfTest() {
     // --- Jack: consegne ---
     printf("   foto nel catalogo: %d\n", (int)P.photos.size());
     Check(QUESTS[Q_PHOTO].stage == 20, "otto fotografie per il catalogo");
+    int cloaks = P.inv.Count(I_DARKCLOAK); // il bottino casuale può contenerne già una
     DialogueStart(jack);
     ChooseOption("Ho fotografato lo Squarciatore");
     ChooseOption("Grazie, Jack");
@@ -653,7 +723,7 @@ static int RunSelfTest() {
     ChooseOption("Ho trovato il tuo diario");
     ChooseOption("piacere");
     SetGameState(GS_PLAY);
-    Check(QUESTS[Q_BEAST].done && QUESTS[Q_PHOTO].done && P.inv.Count(I_DARKCLOAK) == 1 && P.inv.Count(I_JOURNAL) == 0, "La bestia della gola e Il catalogo di Jack completate");
+    Check(QUESTS[Q_BEAST].done && QUESTS[Q_PHOTO].done && P.inv.Count(I_DARKCLOAK) == cloaks + 1 && P.inv.Count(I_JOURNAL) == 0, "La bestia della gola e Il catalogo di Jack completate");
 
     // --- Covo dei Teschi ---
     Teleport(ZONE_WASTE, 194, -88);
@@ -779,7 +849,15 @@ static int RunSelfTest() {
     int done = 0;
     for (auto& q : QUESTS) done += q.done;
     Check(done == Q_COUNT, "tutte le 8 missioni completate");
+
     printf("   livello %d, PE %d, foto %d, volte scoperto %d, karma %d, tappi %d\n", P.level, P.xp, (int)P.photos.size(), P.timesCaught, P.karma, P.inv.Count(I_CAPS));
+    // --- mondo aperto: si parte fuori, a Ferrocittà, con l'equipaggiamento ---
+    NewGame(true);
+    Check(G.player.zone == ZONE_WASTE && DistXZ(G.player.pos, W.locations[1].travelPos) < 6, "mondo aperto: si parte alle porte di Ferrocittà");
+    Check(G.player.inv.Count(I_CAMERA) == 1 && G.player.tool == TOOL_CAMERA && QUESTS[Q_MAIN].stage == 20, "mondo aperto: fotocamera in mano e missione principale avviata");
+    Check(FindInterByTag("vault_door_in")->open && G.flags["vault_opened"], "mondo aperto: la porta del Rifugio è aperta");
+    Sim(1.5f);
+    Check(QUESTS[Q_MAIN].stage == 30, "mondo aperto: Ferrocittà scoperta, la storia prosegue");
     printf("=== %s (%d errori) ===\n", sFail ? "FALLITO" : "SUPERATO", sFail);
     return sFail ? 1 : 0;
 }
@@ -796,6 +874,8 @@ struct TestOpts {
     bool third = false;
     int pipTab = 0, pipSub = 0;
     std::string give;
+    std::string name;
+    bool openWorld = false;
 };
 
 static TestOpts ParseArgs(int argc, char** argv) {
@@ -815,50 +895,38 @@ static TestOpts ParseArgs(int argc, char** argv) {
         else if (a == "--third") t.third = true;
         else if (a == "--pip") { t.pipTab = (int)next(0); t.pipSub = (int)next(0); }
         else if (a == "--give" && i + 1 < argc) t.give = argv[++i];
+        else if (a == "--name" && i + 1 < argc) t.name = argv[++i];
+        else if (a == "--openworld") { t.openWorld = true; t.newgame = true; }
     }
     return t;
 }
 
-int main(int argc, char** argv) {
-    TestOpts test = ParseArgs(argc, argv);
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
-    InitWindow(1280, 720, "Dustfall - Cronache delle Terre Bruciate");
-    SetWindowMinSize(960, 540);
-    SetExitKey(KEY_NULL);
-    Image icon = MakeIcon();
-    SetWindowIcon(icon);
-    UnloadImage(icon);
-    InitAudioDevice();
-    SetTargetFPS(144);
-    rlSetClipPlanes(0.02, 900.0);
+static TestOpts sTest;
+static bool sSelfTest = false;
+static int sFrame = 0;
 
-    ItemsInit();
-    RenderInit();
-    UIInit();
-    LoadSettings();
-
+static void DrawLoading() {
     BeginDrawing();
     ClearBackground(Col(8, 7, 5));
     UIText("DUSTFALL", UIW() / 2, 300, 72, Col(255, 200, 110), 1);
     UIText("Generazione delle Terre Bruciate...", UIW() / 2, 400, 24, Col(230, 200, 150), 1);
     EndDrawing();
+}
 
-    WorldBuild();
+// dopo la generazione del mondo
+static void StartGame() {
     AudioInit();
     ApplySettings();
     ResetDynamicWorld();
     G.player.zone = ZONE_WASTE;
     SetGameState(GS_MENU);
+}
 
-    for (int i = 1; i < argc; i++)
-        if (std::string(argv[i]) == "--selftest") {
-            int rc = RunSelfTest();
-            CloseWindow();
-            return rc;
-        }
-
+static void ApplyTestOpts() {
+    TestOpts& test = sTest;
     if (test.newgame) {
-        NewGame();
+        NewGame(test.openWorld);
+        if (!test.name.empty()) G.player.name = test.name;
         if (!test.give.empty()) {
             // es. "--give all": equipaggiamento completo per i test
             int items[][2] = {{I_CAMERA, 1}, {I_BAIT, 10}, {I_NOISE, 10}, {I_MEDKIT, 10}, {I_STEALTHBOY, 2}, {I_REPAIRKIT, 3}, {I_PARTS, 5}, {I_CAPS, 500}, {I_MEAT, 3}, {I_DARKCLOAK, 1}};
@@ -898,25 +966,120 @@ int main(int argc, char** argv) {
         if (test.state == GS_LEVELUP) { G.player.pendingLevels = 1; G.player.level = 2; LevelUpOpen(); }
     }
     if (!test.shot.empty() && test.state == GS_MENU) { G.state = GS_MENU; }
+}
 
-    int frame = 0;
-    while (!WindowShouldClose() && !G.quit) {
-        float dt = std::min(GetFrameTime(), 0.05f);
-        if (!test.shot.empty()) dt = 1.0f / 30.0f;
-        UpdateFrame(dt);
-        DrawFrame();
-        frame++;
-        if (!test.shot.empty() && frame >= test.frames) {
-            TakeScreenshot(test.shot.c_str());
-            break;
+// comandi touch da mostrare in ogni schermata
+static int TouchModeFor(GameState s) {
+    switch (s) {
+        case GS_PLAY: return G.fade == 0 ? TM_PLAY : TM_NONE;
+        case GS_SCAN: return TM_SCAN;
+        case GS_LOCKPICK: return TM_LOCKPICK;
+        case GS_PIPBOY: return TM_PIPBOY;
+        case GS_CHAT: return TM_NONE;
+        default: return TM_MENU;
+    }
+}
+
+// un fotogramma di gioco; false quando il gioco deve terminare
+static bool MainFrame() {
+    PlatformFrame();
+    float dt = std::min(GetFrameTime(), 0.05f);
+    if (!sTest.shot.empty()) dt = 1.0f / 30.0f;
+    UpdateFrame(dt);
+    PlatformSetTouchMode(TouchModeFor(G.state));
+    DrawFrame();
+    sFrame++;
+    if (!sTest.shot.empty() && sFrame >= sTest.frames) {
+        TakeScreenshot(sTest.shot.c_str());
+        return false;
+    }
+    return !G.quit;
+}
+
+#if DUSTFALL_WEB
+// Nel browser il ciclo è guidato da requestAnimationFrame: il primo fotogramma mostra il
+// caricamento, il secondo genera il mondo, poi si gioca.
+static void WebFrame() {
+    static int stage = 0;
+    if (stage == 0) {
+        DrawLoading();
+        PlatformStatus("Generazione delle Terre Bruciate...");
+        stage = 1;
+        return;
+    }
+    if (stage == 1) {
+        WorldBuild();
+        StartGame();
+        stage = 2;
+        if (sSelfTest) {
+            int rc = RunSelfTest();
+            EM_ASM({ if (Module.dfTestDone) Module.dfTestDone($0); }, rc);
+            emscripten_cancel_main_loop();
+            return;
         }
+        ApplyTestOpts();
+        PlatformReady();
+        return;
+    }
+    if (!MainFrame()) emscripten_cancel_main_loop();
+}
+#endif
+
+int main(int argc, char** argv) {
+    sTest = ParseArgs(argc, argv);
+    for (int i = 1; i < argc; i++)
+        if (std::string(argv[i]) == "--selftest") sSelfTest = true;
+    PlatformInit();
+    // sui telefoni niente MSAA: si disegna già ad alta densità
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | (PlatformTouch() ? 0 : FLAG_MSAA_4X_HINT));
+#if DUSTFALL_WEB
+    // la tela riempie la finestra del browser (raylib la ridimensiona da sé)
+    InitWindow(EM_ASM_INT({ return window.innerWidth; }), EM_ASM_INT({ return window.innerHeight; }), "Dustfall - Cronache delle Terre Bruciate");
+#else
+    InitWindow(1280, 720, "Dustfall - Cronache delle Terre Bruciate");
+    SetWindowMinSize(960, 540);
+    Image icon = MakeIcon();
+    SetWindowIcon(icon);
+    UnloadImage(icon);
+#endif
+    SetExitKey(KEY_NULL);
+    InitAudioDevice();
+#if !DUSTFALL_WEB
+    SetTargetFPS(144); // nel browser decide requestAnimationFrame
+#endif
+    rlSetClipPlanes(0.02, 900.0);
+
+    ItemsInit();
+    RenderInit();
+    UIInit();
+    LoadSettings();
+    NetInit();
+
+#if DUSTFALL_WEB
+    emscripten_set_main_loop(WebFrame, 0, 1);
+    return 0;
+#else
+    DrawLoading();
+    WorldBuild();
+    StartGame();
+
+    if (sSelfTest) {
+        int rc = RunSelfTest();
+        CloseWindow();
+        return rc;
+    }
+    ApplyTestOpts();
+
+    while (!WindowShouldClose() && MainFrame()) {
     }
 
     SaveSettings();
+    NetShutdown();
     AudioShutdown();
     UIShutdown();
     RenderShutdown();
     CloseAudioDevice();
     CloseWindow();
     return 0;
+#endif
 }

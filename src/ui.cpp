@@ -360,7 +360,7 @@ void HudDraw() {
     if (P.pendingLevels > 0) UIText("▲ LIVELLO SUPERIORE  (TAB)", bx + 150, by + 44, 15, Col(255, 230, 120));
     if (P.inv.Weight() > CarryMax()) UIText("SOVRACCARICO", Wd / 2, 680, 18, Col(255, 140, 90), 1);
 
-    if (G.settings.showFps) UIText(Fmt("%d FPS", GetFPS()), Wd - 90, 10, 16, PIP_DIM);
+    if (G.settings.showFps) UIText(Fmt("%d FPS", GetFPS()), Wd - 16, 690, 16, PIP_DIM, 2);
 }
 
 void UIDrawMessages() {

@@ -1,5 +1,6 @@
 // Minigiochi: scasso delle serrature e violazione dei terminali.
 #include "game.h"
+#include "platform.h"
 
 // ---------------------------------------------------------------------------
 //  Scasso
@@ -43,7 +44,7 @@ void LockpickUpdate(float dt) {
     if (LP.cooldown > 0) LP.cooldown -= dt;
     bool turning = (IsKeyDown(KEY_SPACE) || IsKeyDown(KEY_W) || IsMouseButtonDown(MOUSE_BUTTON_LEFT)) && LP.cooldown <= 0;
     if (!turning) {
-        float md = GetMouseDelta().x * 0.25f;
+        float md = LookDelta().x * 0.25f;
         if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) md -= 90 * dt;
         if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) md += 90 * dt;
         LP.pin = Clamp(LP.pin + md, -90.0f, 90.0f);

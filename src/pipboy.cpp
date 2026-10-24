@@ -1,5 +1,6 @@
 // Pip-Boy, baratto, saccheggio e avanzamento di livello.
 #include "game.h"
+#include "net.h"
 
 static const char* TABS[] = {"STAT", "INV", "DATI", "MAPPA", "RADIO"};
 static const char* SUBTABS[][5] = {
@@ -226,6 +227,26 @@ void PipBoyUpdate() {
                     PlaySfx(SFX_UI_OK);
                     return;
                 }
+            }
+        }
+        // multigiocatore: clic su un altro giocatore per raggiungerlo
+        int who = NetMapClick([&](Vector3 p) { return V2(mx + (p.x + WORLD_HALF) / (WORLD_HALF * 2) * ms, my + (p.z + WORLD_HALF) / (WORLD_HALF * 2) * ms); });
+        if (who >= 0) {
+            const RemotePlayer& rp = NetPlayers()[who];
+            if (G.chased || HostilesNear(50)) {
+                Notify("Non puoi viaggiare mentre qualcuno ti insegue.", Col(255, 160, 100));
+                PlaySfx(SFX_UI_BACK);
+            } else {
+                Vector3 dest = rp.pos - YawDir(rp.yaw) * 2.5f; // alle sue spalle
+                G.timeOfDay += 0.5f + DistXZ(P.pos, rp.pos) / 400.0f;
+                G.pendingZone = ZONE_WASTE;
+                G.pendingPos = dest;
+                G.pendingYaw = AngleTo(dest, rp.pos);
+                G.fade = 0.001f;
+                SetGameState(GS_PLAY);
+                Notify("Raggiungi " + rp.name + ".");
+                PlaySfx(SFX_UI_OK);
+                return;
             }
         }
     }
@@ -482,11 +503,13 @@ void PipBoyDraw() {
             DrawTriangle(a, c, b, Color{230, 255, 230, 255});
             DrawTriangle(a, b, c, Color{230, 255, 230, 255});
         }
+        NetMapDraw(M, hover);
         float ix = mx + ms + 30;
         UIText("TERRE BRUCIATE", ix, my, 24, PIP);
         UIText(P.zone == ZONE_WASTE ? "Posizione attuale" : std::string("Ti trovi in: ") + W.zones[P.zone].name, ix, my + 36, 18, PIP_DIM);
         UIText("Clic su un luogo scoperto", ix, my + 80, 18, PIP);
         UIText("per il viaggio rapido.", ix, my + 102, 18, PIP);
+        if (NetAvailable()) UIText("Rombi: altri giocatori.", ix, my + 124, 18, Col(255, 225, 150));
         if (!hover.empty()) UIText("> " + hover, ix, my + 150, 22, Color{220, 255, 220, 255});
         
     } else if (G.pipTab == 4) {

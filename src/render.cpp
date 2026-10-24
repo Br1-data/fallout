@@ -1,13 +1,13 @@
 // Rendering: shader d'illuminazione, cielo, costruttore di mesh, primitive.
 #include "game.h"
+#include "platform.h"
 
 Renderer R;
 
 // ---------------------------------------------------------------------------
-//  Shader
+//  Shader (l'intestazione #version dipende dalla piattaforma: GLSL 330 o GLSL ES 300)
 // ---------------------------------------------------------------------------
-static const char* LIT_VS = R"(#version 330
-in vec3 vertexPosition;
+static const char* LIT_VS = R"(in vec3 vertexPosition;
 in vec3 vertexNormal;
 in vec4 vertexColor;
 uniform mat4 mvp;
@@ -25,8 +25,7 @@ void main() {
 }
 )";
 
-static const char* LIT_FS = R"(#version 330
-in vec3 fragPos;
+static const char* LIT_FS = R"(in vec3 fragPos;
 in vec3 fragNormal;
 in vec4 fragColor;
 uniform sampler2D texture0;
@@ -80,8 +79,7 @@ void main() {
 }
 )";
 
-static const char* SKY_VS = R"(#version 330
-in vec3 vertexPosition;
+static const char* SKY_VS = R"(in vec3 vertexPosition;
 uniform mat4 mvp;
 out vec3 dir;
 void main() {
@@ -90,8 +88,7 @@ void main() {
 }
 )";
 
-static const char* SKY_FS = R"(#version 330
-in vec3 dir;
+static const char* SKY_FS = R"(in vec3 dir;
 uniform vec3 sunDir;
 uniform vec3 zenith;
 uniform vec3 horizon;
@@ -369,8 +366,13 @@ static Texture2D MakeNoise() {
 // ---------------------------------------------------------------------------
 //  Inizializzazione
 // ---------------------------------------------------------------------------
+static Shader LoadShaderSrc(const char* vs, const char* fs) {
+    std::string v = std::string(GlslHeader()) + vs, f = std::string(GlslHeader()) + fs;
+    return LoadShaderFromMemory(v.c_str(), f.c_str());
+}
+
 void RenderInit() {
-    R.lit = LoadShaderFromMemory(LIT_VS, LIT_FS);
+    R.lit = LoadShaderSrc(LIT_VS, LIT_FS);
     R.lit.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(R.lit, "matModel");
     R.lit.locs[SHADER_LOC_MATRIX_NORMAL] = GetShaderLocation(R.lit, "matNormal");
     R.locViewPos = GetShaderLocation(R.lit, "viewPos");
@@ -387,7 +389,7 @@ void RenderInit() {
     R.locLightRange = GetShaderLocation(R.lit, "lightRange[0]");
     R.locTime = GetShaderLocation(R.lit, "time");
 
-    R.sky = LoadShaderFromMemory(SKY_VS, SKY_FS);
+    R.sky = LoadShaderSrc(SKY_VS, SKY_FS);
     R.skLocSunDir = GetShaderLocation(R.sky, "sunDir");
     R.skLocZenith = GetShaderLocation(R.sky, "zenith");
     R.skLocHorizon = GetShaderLocation(R.sky, "horizon");

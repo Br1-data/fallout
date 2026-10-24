@@ -1,5 +1,7 @@
 // Giocatore: statistiche, movimento, attrezzi (fotocamera, esche, barattoli), furtività e visuale.
 #include "game.h"
+#include "net.h"
+#include "platform.h"
 
 // ---------------------------------------------------------------------------
 //  Statistiche
@@ -441,7 +443,7 @@ void PlayerUpdate(float dt) {
     Player& P = G.player;
     P.playTime += dt;
     // --- visuale ---
-    Vector2 md = GetMouseDelta();
+    Vector2 md = LookDelta();
     if (G.mouseSkip > 0) { G.mouseSkip--; md = V2(0, 0); }
     float sens = 0.0022f * G.settings.sensitivity * (P.aimT > 0.5f ? 0.45f : 1.0f);
     P.yaw -= md.x * sens;
@@ -453,7 +455,8 @@ void PlayerUpdate(float dt) {
         P.pipLight = !P.pipLight;
         PlaySfx(SFX_UI_MOVE);
     }
-    if (IsKeyPressed(KEY_C) || IsKeyPressed(KEY_LEFT_CONTROL)) P.crouch = !P.crouch;
+    // nel browser Ctrl+W chiuderebbe la scheda: solo C
+    if (IsKeyPressed(KEY_C) || (!DUSTFALL_WEB && IsKeyPressed(KEY_LEFT_CONTROL))) P.crouch = !P.crouch;
 
     // --- movimento ---
     Vector3 fwd = YawDir(P.yaw), right = V3(-cosf(P.yaw), 0, sinf(P.yaw));
@@ -652,7 +655,7 @@ void DrawViewModel() {
     Matrix S = MatrixScale(0.1f, 0.1f, 0.1f) * B;
     float hs = Vector3Length(V3(P.vel.x, 0, P.vel.z));
     float bobAmt = P.onGround ? Clamp01(hs / 6.0f) : 0;
-    Vector2 md = GetMouseDelta();
+    Vector2 md = LookDelta();
     static Vector2 sway{0, 0};
     sway.x = LerpF(sway.x, Clamp(md.x * 0.0006f, -0.03f, 0.03f), Clamp01(GetFrameTime() * 8));
     sway.y = LerpF(sway.y, Clamp(md.y * 0.0006f, -0.03f, 0.03f), Clamp01(GetFrameTime() * 8));
@@ -698,7 +701,13 @@ void DrawPlayerBody() {
     look.skin = Col(215, 170, 140);
     float hs = Vector3Length(V3(P.vel.x, 0, P.vel.z));
     float hold = P.tool == TOOL_CAMERA ? 1.0f : (P.tool != TOOL_HANDS ? 0.4f : 0.0f);
-    DrawHumanoid(P.pos, P.yaw, look, P.bob * 1.1f, Clamp01(hs / 4.5f), hold, P.throwT, 0, P.tool, P.flash > 0 ? 1 : 0, 1.0f, false, P.crouch ? 1.0f : 0.0f);
+    float action = P.throwT;
+    if (NetLocalWave() > 0 && action <= 0) {
+        // saluto agli altri giocatori (tasto Z)
+        hold = 0;
+        action = 0.2f + 0.15f * sinf(G.time * 12.0f);
+    }
+    DrawHumanoid(P.pos, P.yaw, look, P.bob * 1.1f, Clamp01(hs / 4.5f), hold, action, 0, P.tool, P.flash > 0 ? 1 : 0, 1.0f, false, P.crouch ? 1.0f : 0.0f);
     if (P.stealthT > 0) {
         // alone azzurro del mantello ottico
         BeginBlendMode(BLEND_ADDITIVE);
