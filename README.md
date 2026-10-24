@@ -1,9 +1,12 @@
 # DUSTFALL — Cronache delle Terre Bruciate
 
-Avventura **3D in prima/terza persona** per **Windows**, ambientata in un mondo post-apocalittico in
+Avventura **3D open world in prima/terza persona**, ambientata in un mondo post-apocalittico in
 stile *Fallout* — ma **senza violenza**: niente armi, niente combattimenti, nessuno muore. Un
 abitante di un Rifugio antiatomico esce per la prima volta nelle Terre Bruciate armato solo di una
 fotocamera, di un po' di astuzia e di tanta curiosità.
+
+Si gioca **nel browser, anche da telefono, e in multigiocatore con gli amici**:
+**[br1-data.github.io/fallout](https://br1-data.github.io/fallout/)** — oppure con l'eseguibile per Windows.
 
 ![Menu principale](docs/screenshots/00_menu.jpg)
 
@@ -14,7 +17,39 @@ fotocamera, di un po' di astuzia e di tanta curiosità.
 | ![Base Delta-9 di notte](docs/screenshots/05_base_notte.jpg) | ![Catalogo fotografico](docs/screenshots/06_catalogo.jpg) |
 | ![Covo dei Teschi](docs/screenshots/07_covo_dei_teschi.jpg) | ![Dialogo](docs/screenshots/08_dialogo.jpg) |
 
-## Come giocare
+## Gioca nel browser (anche con un amico)
+
+1. Apri **[br1-data.github.io/fallout](https://br1-data.github.io/fallout/)** su un computer o su un telefono.
+2. Per giocare con un amico premi **Gioca con un amico** nella schermata iniziale: si crea una stanza
+   privata e il link si può mandare (su telefono si apre il menu Condividi, su PC si copia). Chi apre il
+   link entra nella stessa stanza. Senza stanza privata si gioca nella stanza *pubblica*.
+3. Premi **GIOCA**, poi **MONDO APERTO**: si parte alle porte di Ferrocittà, dove ci si ritrova.
+   **NUOVA STORIA** comincia invece dentro il Rifugio 33, come nella versione per Windows.
+
+Nel multigiocatore ognuno ha il proprio mondo e le proprie missioni, ma vede gli altri viandanti della
+stanza muoversi, salutare e scattare foto, con il nome sopra la testa. Si chatta (**T** o **Invio**, sul
+telefono il pulsante **CHAT**), si saluta (**Z**), si vede l'elenco dei giocatori (**P**) e dalla mappa
+del Pip-Boy si raggiunge un amico con il viaggio rapido (rombi gialli). Il menu **Multigiocatore** permette
+di cambiare stanza e di reinviare l'invito.
+
+**Da telefono o tablet** (Android con Chrome, iPhone/iPad con Safari) compaiono i comandi touch: pollice
+sinistro per muoversi (spingendo oltre il cerchio si corre), dito a destra per guardarsi intorno, pulsanti
+per usare l'attrezzo, interagire, saltare, accovacciarsi, Pip-Boy, scanner, chat e il resto; nei menu
+basta toccare le voci (c'è anche un tastierino). Si gioca in orizzontale. Su Android il gioco va a schermo
+intero; su iPhone, per lo schermo intero, *Condividi → Aggiungi alla schermata Home* e apri Dustfall
+dall'icona. I salvataggi restano nel browser del dispositivo.
+
+Come funziona la rete, senza un server di gioco: i giocatori della stessa stanza si scambiano piccoli
+messaggi sia **direttamente** (WebRTC, quando la rete lo permette) sia tramite **broker MQTT pubblici**
+(EMQX e HiveMQ), che funzionano anche dalle reti dei telefoni. Sui broker i messaggi viaggiano cifrati
+con una chiave ricavata dal nome della stanza: chi non conosce il nome della stanza non li legge.
+La stanza *pubblica* è, appunto, pubblica.
+
+| Multigiocatore: l'amico arriva dal telefono | Comandi touch su telefono |
+|---|---|
+| ![Multigiocatore](docs/screenshots/10_multigiocatore.jpg) | ![Telefono](docs/screenshots/11_telefono.jpg) |
+
+## Gioca su Windows
 
 1. Scarica **[`release/Dustfall.exe`](release/Dustfall.exe)** (un unico file, nessuna installazione).
 2. Fai doppio clic. Al primo avvio Windows SmartScreen potrebbe avvisare che l'app non è firmata:
@@ -115,7 +150,12 @@ Per andare avanti devi osservare, nasconderti, distrarre, convincere e riparare:
 | **L** | Luce del Pip-Boy |
 | **F5 / F9** | Salvataggio / caricamento rapido |
 | **F11** | Schermo intero |
-| **ESC** | Pausa |
+| **ESC** | Pausa (nel browser ESC libera il mouse e mette in pausa) |
+| **T / Invio** | Chat (versione web) |
+| **Z** | Saluta gli altri giocatori (versione web) |
+| **P** | Elenco dei giocatori nella stanza (versione web) |
+
+Nel browser per accovacciarsi si usa solo **C** (Ctrl+W chiuderebbe la scheda).
 
 ## Compilare dai sorgenti
 
@@ -140,14 +180,23 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
 **Eseguibile Windows da Linux (MinGW-w64):** `./tools/build_windows_cross.sh`
 (richiede il pacchetto `mingw-w64`). Il risultato viene copiato in `release/Dustfall.exe`.
 
-Ogni push viene compilato anche da GitHub Actions (`.github/workflows/build.yml`), che produce
-l'eseguibile Windows come artefatto ed esegue un test automatico.
+**Versione web (WebAssembly):** con [Emscripten](https://emscripten.org/) 3.1.74 attivo
+(`source <emsdk>/emsdk_env.sh`) esegui `./tools/build_web.sh`; il sito pronto è in `build-web/site`
+(per provarlo: `cd build-web/site && python3 -m http.server 8000`). Parametri utili nell'indirizzo:
+`?rete=locale` fa parlare tra loro le schede dello stesso browser, `?touch=1` forza i comandi touch,
+`?mqtt=ws://...` e `?relay=wss://...` usano broker MQTT o relay Nostr propri.
+
+Ogni push viene compilato anche da GitHub Actions: `.github/workflows/build.yml` produce
+l'eseguibile Windows ed esegue il test automatico su Linux; `.github/workflows/pages.yml` compila la
+versione web, esegue lo stesso test dentro Chromium e, dal ramo `main`, la pubblica su GitHub Pages
+(da attivare una volta in *Settings → Pages → Source: GitHub Actions*).
 
 ### Test automatico
 
 `Dustfall --selftest` gioca da solo l'intera trama (dialoghi, fotografie, esche, barattoli, essere
-scacciati, riparazioni, scale, terminali, tutte le otto missioni, svenimento, salvataggio/caricamento
-e finale) e verifica che tutto funzioni.
+scacciati, riparazioni, scale, terminali, tutte le otto missioni, svenimento, salvataggio/caricamento,
+finale e partenza in mondo aperto) e verifica che tutto funzioni. Nella versione web lo stesso test si
+avvia con `index.html?rete=off&args=--selftest`, oppure con `node tools/web_selftest.js build-web/site`.
 `Dustfall --newgame --zone 0 --pos 0 60 --yaw 180 --time 15 --shot foto.png` scatta uno
 screenshot da una posizione qualsiasi.
 
@@ -170,10 +219,18 @@ screenshot da una posizione qualsiasi.
 | `src/minigames.cpp` | Scasso e violazione dei terminali |
 | `src/audio.cpp` | Sintesi di effetti sonori, ambiente e radio |
 | `src/save.cpp` | Salvataggi e impostazioni |
+| `src/platform.cpp` | Differenze tra desktop e browser: puntatore, schermo intero, salvataggi, touch |
+| `src/net.cpp` | Multigiocatore: altri giocatori, nomi, chat, menu della stanza, mappa |
+| `web/index.html` | Pagina del gioco: schermata iniziale, inviti, caricamento |
+| `web/net.js` | Rete: broker MQTT cifrati e WebRTC diretto (Trystero) |
+| `web/touch.js` | Comandi touch e finestra per scrivere su telefono |
 
 ## Crediti
 
 - [raylib](https://github.com/raysan5/raylib) — licenza zlib/libpng.
+- [Emscripten](https://emscripten.org/) per la versione web.
+- [Trystero](https://github.com/dmotz/trystero) e [@noble/secp256k1](https://github.com/paulmillr/noble-secp256k1)
+  — licenza MIT (in `web/trystero.min.js`, rigenerabile con `tools/build_trystero.sh`).
 - Font [Share Tech Mono](https://fonts.google.com/specimen/Share+Tech+Mono) e
   [VT323](https://fonts.google.com/specimen/VT323) — SIL Open Font License (vedi `assets/fonts`).
 
