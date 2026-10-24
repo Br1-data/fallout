@@ -1,5 +1,5 @@
 // Multigiocatore: gli altri viandanti nelle Terre Bruciate.
-// La rete vera e propria è in web/net.js (WebRTC peer-to-peer); qui ci sono gli avatar, la chat,
+// La rete vera e propria è in web/net.js (broker MQTT e WebRTC); qui ci sono gli avatar, la chat,
 // i nomi sopra le teste, il menu della stanza e i segnalini sulla mappa.
 #include "net.h"
 #include "platform.h"
@@ -12,10 +12,8 @@ static std::string sChatInput;
 static int sStatus = 0;
 static bool sAvail = false;
 static bool sShowList = false;
-static int sFlashN = 0, sWaveN = 0;
+static int sWaveN = 0;
 static float sLocalWave = 0;
-static float sProfileT = 0;
-static bool sPrevFlash = false;
 
 static const Color CHAT_OTHER = {255, 225, 150, 255};
 static const Color CHAT_SYS = {150, 200, 160, 255};
@@ -27,7 +25,9 @@ EM_JS(int, js_net_init, (), {
     if (typeof DustfallNet === 'undefined') return 0;
     if (!Module.dfNetStarted) {
         var q = new URLSearchParams(location.search);
-        DustfallNet.init({kind: q.get('rete') || 'nostr', relay: q.get('relay') || '', room: decodeURIComponent(location.hash.slice(1))});
+        var room = "";
+        try { room = decodeURIComponent(location.hash.slice(1)); } catch (e) {}
+        DustfallNet.init({kind: q.get("rete") || "auto", relay: q.get("relay") || "", mqtt: q.get("mqtt") || "", room: room});
         Module.dfNetStarted = true;
     }
     return 1;
@@ -57,6 +57,7 @@ EM_JS(void, js_net_chat, (const char* t), { DustfallNet.sendChat(UTF8ToString(t)
 EM_JS(void, js_net_emote, (int e), { DustfallNet.sendEmote(e); });
 EM_JS(int, js_net_status, (), { return DustfallNet.status(); });
 EM_JS(int, js_net_rtt, (const char* id), { return DustfallNet.rtt(UTF8ToString(id)); });
+EM_JS(int, js_net_direct, (const char* id), { return DustfallNet.via(UTF8ToString(id)) === 'diretto' ? 1 : 0; });
 EM_JS(void, js_net_set_room, (const char* r), { DustfallNet.setRoom(UTF8ToString(r)); });
 EM_JS(void, js_net_copy_invite, (), {
     var l = DustfallNet.inviteLink();
@@ -93,6 +94,14 @@ static std::string NetRoom() {
     return "";
 }
 
+// collegamento diretto (WebRTC) o tramite broker
+static const char* NetVia(const std::string& id) {
+#if DUSTFALL_WEB
+    if (sAvail) return js_net_direct(id.c_str()) ? "diretto" : "via broker";
+#endif
+    return "";
+}
+
 static std::string NetInvite() {
 #if DUSTFALL_WEB
     if (sAvail) return TakeJsString(js_net_invite());
@@ -111,6 +120,13 @@ static void AddChat(const std::string& text, Color col) {
     sChat.push_back({text, col, 0});
     if (sChat.size() > 40) sChat.erase(sChat.begin());
 }
+
+static bool LocalInGame() { return G.state != GS_MENU && G.state != GS_INTRO && G.state != GS_CREATE; }
+
+#if DUSTFALL_WEB
+static int sFlashN = 0;
+static float sProfileT = 0;
+static bool sPrevFlash = false;
 
 static RemotePlayer* FindRemote(const std::string& id) {
     for (auto& r : sRemotes)
@@ -169,8 +185,6 @@ static std::string PlayerWhere() {
     int li = NearestLocation(P.pos, &d);
     return li >= 0 && d < 120 ? W.locations[li].name : std::string("Terre Bruciate");
 }
-
-static bool LocalInGame() { return G.state != GS_MENU && G.state != GS_INTRO && G.state != GS_CREATE; }
 
 static void HandleEvent(const std::string& line) {
     std::vector<std::string> f = Split(line, '\t');
@@ -239,6 +253,8 @@ static void HandleEvent(const std::string& line) {
             AddChat(r.name + " ti saluta.", CHAT_SYS);
     }
 }
+
+#endif
 
 void NetInit() {
 #if DUSTFALL_WEB
@@ -558,7 +574,7 @@ void OnlineDraw() {
         if (!r.hasState || y > 600) continue;
         int rtt = NetRtt(r.id);
         UIText(r.name + Fmt("  [liv. %d]", r.level), x, y, 19, CHAT_OTHER);
-        UIText(r.where + (rtt >= 0 ? Fmt("   %d ms", rtt) : std::string()), x + 640, y, 17, PIP_DIM, 2);
+        UIText(r.where + (rtt >= 0 ? Fmt("   %d ms, ", rtt) : std::string("   ")) + NetVia(r.id), x + 640, y, 17, PIP_DIM, 2);
         y += 26;
     }
     UIText("Chi è nella stessa stanza si incontra nelle Terre Bruciate. Ognuno ha il proprio mondo e le proprie missioni:", Wd / 2, 630, 15, PIP_DIM, 1);

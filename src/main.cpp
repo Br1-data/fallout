@@ -4,6 +4,8 @@
 #include "platform.h"
 #include "net.h"
 
+#include <random>
+
 #if DUSTFALL_WEB
 #include <emscripten/emscripten.h>
 #endif
@@ -58,7 +60,12 @@ void NewGame(bool openWorld) {
         if (W.locations.size() > 1) {
             W.locations[0].discovered = true; // il Rifugio 33
             Location& town = W.locations[1];
-            ChangeZone(ZONE_WASTE, town.travelPos, AngleTo(town.travelPos, town.pos));
+            town.discovered = true;           // si parte alle sue porte: è già sulla mappa per il viaggio rapido
+            // ognuno parte in un punto un po' diverso, così i giocatori non nascono uno dentro l'altro
+            std::random_device rd;
+            float a = (rd() % 3600) * 0.1f * DEG2RAD, d = 1.5f + (rd() % 300) * 0.01f;
+            Vector3 spawn = town.travelPos + V3(sinf(a) * d, 0, cosf(a) * d);
+            ChangeZone(ZONE_WASTE, spawn, AngleTo(spawn, town.pos));
         }
         G.messages.clear();
         Notify("Mondo aperto: le Terre Bruciate sono tue. Vai dove vuoi!", Col(255, 230, 140));
@@ -842,7 +849,15 @@ static int RunSelfTest() {
     int done = 0;
     for (auto& q : QUESTS) done += q.done;
     Check(done == Q_COUNT, "tutte le 8 missioni completate");
+
     printf("   livello %d, PE %d, foto %d, volte scoperto %d, karma %d, tappi %d\n", P.level, P.xp, (int)P.photos.size(), P.timesCaught, P.karma, P.inv.Count(I_CAPS));
+    // --- mondo aperto: si parte fuori, a Ferrocittà, con l'equipaggiamento ---
+    NewGame(true);
+    Check(G.player.zone == ZONE_WASTE && DistXZ(G.player.pos, W.locations[1].travelPos) < 6, "mondo aperto: si parte alle porte di Ferrocittà");
+    Check(G.player.inv.Count(I_CAMERA) == 1 && G.player.tool == TOOL_CAMERA && QUESTS[Q_MAIN].stage == 20, "mondo aperto: fotocamera in mano e missione principale avviata");
+    Check(FindInterByTag("vault_door_in")->open && G.flags["vault_opened"], "mondo aperto: la porta del Rifugio è aperta");
+    Sim(1.5f);
+    Check(QUESTS[Q_MAIN].stage == 30, "mondo aperto: Ferrocittà scoperta, la storia prosegue");
     printf("=== %s (%d errori) ===\n", sFail ? "FALLITO" : "SUPERATO", sFail);
     return sFail ? 1 : 0;
 }
