@@ -7,7 +7,7 @@
 
 struct RemotePlayer {
     std::string id, name = "Viandante", where, say;
-    int level = 1, outfit = OF_VAULT, zone = -1, tool = TOOL_HANDS;
+    int level = 1, outfit = OF_VAULT, zone = -1, weaponModel = WM_FIST;
     bool female = false, inGame = false, crouch = false, hasState = false, announced = false;
     Vector3 netPos{}, pos{};
     float netYaw = 0, yaw = 0, speed = 0, anim = 0, crouchT = 0;
@@ -27,7 +27,6 @@ void NetDraw3D(Camera3D cam);        // avatar degli altri giocatori
 void NetDrawHud();                   // nomi, chat, stato della rete
 bool NetPlayKeys();                  // tasti del multigiocatore durante il gioco (true = stato cambiato)
 float NetLocalWave();                // animazione del saluto del giocatore locale
-bool NetPhoto(const std::string& key); // nuovo contributo alla spedizione della stanza
 
 void ChatUpdate();                   // GS_CHAT
 void OnlineOpen(GameState back);     // GS_ONLINE: stanza, invito, elenco dei giocatori

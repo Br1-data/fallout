@@ -60,14 +60,8 @@ async function run() {
         const executable = process.env.CHROMIUM_EXECUTABLE || (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined);
         browser = await chromium.launch({ executablePath: executable,
             args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-        // L'orologio continua a scorrere, ma parte a meta' turno per evitare un cambio durante il test.
-        const clockOffset = Math.floor(Date.now() / 720000) * 720000 + 360000 - Date.now();
         async function makePage(name, room, gameArgs, touch = false) {
             const context = await browser.newContext({ viewport: touch ? { width: 960, height: 540 } : { width: 1280, height: 720 }, hasTouch: touch });
-            await context.addInitScript(offset => {
-                const now = Date.now.bind(Date);
-                Date.now = () => now() + offset;
-            }, clockOffset);
             const page = await context.newPage();
             page.on('pageerror', error => errors.push(`${name}: ${error.message}`));
             const url = new URL(gameArgs ? '/index.html' : '/net-test.html', origin);
@@ -104,113 +98,89 @@ async function run() {
         const b = await makePage('Bruno', room);
         await wait(a, () => DustfallNet.peerCount() === 1);
         await wait(b, () => DustfallNet.peerCount() === 1);
-        const keys = await a.evaluate(() => DustfallNet.expedition().targets.map(t => t.key));
-        assert.deepEqual(await b.evaluate(() => DustfallNet.expedition().targets.map(t => t.key)), keys);
-        assert.equal(new Set(keys).size, 3);
-        console.log('[OK] Due contesti indipendenti si incontrano tramite MQTT cifrato.');
+        const aId = await a.evaluate(() => DustfallNet.selfId());
+        await a.evaluate(() => DustfallNet.sendState([0,12.5,2,30,0.2,0,3,0,10,1,0,1]));
+        await wait(b, id => {
+            const peer = DustfallNet.debug().peers[id];
+            return peer && peer.profile && peer.profile.n === 'Ada' && peer.state && peer.state[1] === 12.5 && peer.state[8] === 10;
+        }, aId);
+        console.log('[OK] Due contesti indipendenti condividono profilo, posizione e fucile laser tramite MQTT cifrato.');
 
-        assert.equal(await a.evaluate(key => DustfallNet.expeditionPhoto(key), keys[0]), true);
-        await wait(b, () => DustfallNet.expedition().targets.filter(t => t.done).length === 1);
-        assert.equal(await b.evaluate(() => DustfallNet.expedition().own), 0);
-        assert.equal(await b.evaluate(key => DustfallNet.expeditionPhoto(key), keys[1]), true);
-        await wait(a, () => DustfallNet.expedition().targets.filter(t => t.done).length === 2);
-        assert.equal(await b.evaluate(key => DustfallNet.expeditionPhoto(key), keys[1]), false);
-        assert.equal(await b.evaluate(() => DustfallNet.expedition().own), 1);
-        console.log('[OK] Foto condivise; nessun contributo duplicato o personale inventato.');
+        await a.evaluate(() => { DustfallNet.sendChat('Avanziamo alla Base Delta-9!'); DustfallNet.sendEmote(1); });
+        await wait(b, () => {
+            const events = DustfallNet.poll();
+            window.testEvents = (window.testEvents || '') + events;
+            return window.testEvents.includes('Avanziamo alla Base Delta-9!') && window.testEvents.includes('E\t');
+        });
+        console.log('[OK] Chat e saluto attraversano il broker.');
 
         const c = await makePage('Carla', room);
-        await wait(c, () => DustfallNet.expedition().targets.filter(t => t.done).length === 2);
-        assert.equal(await c.evaluate(() => DustfallNet.expedition().own), 0);
+        await wait(c, id => {
+            const peer = DustfallNet.debug().peers[id];
+            return peer && peer.state && peer.state[8] === 10 && peer.state[9] === 1;
+        }, aId);
         await a.evaluate(() => DustfallNet.bye());
+        await wait(b, () => DustfallNet.peerCount() === 1);
         await a.context().close();
-        assert.equal(await c.evaluate(key => DustfallNet.expeditionPhoto(key), keys[2]), true);
-        await wait(b, () => DustfallNet.expedition().complete);
-        await wait(c, () => DustfallNet.expedition().complete);
-        assert.ok(await c.evaluate(() => DustfallNet.expedition().contributors.some(p => p.name === 'Ada' && p.count === 1)));
-        console.log('[OK] Ingresso tardivo, uscita del primo giocatore e completamento senza host.');
+        assert.equal(await c.evaluate(() => DustfallNet.peerCount()), 1);
+        console.log('[OK] Ingresso tardivo con stato corrente e uscita di un giocatore.');
 
         const d = await makePage('Dina', room + '-alt');
         assert.equal(await d.evaluate(() => DustfallNet.peerCount()), 0);
-        assert.equal(await d.evaluate(() => DustfallNet.expedition().targets.filter(t => t.done).length), 0);
         await c.evaluate(name => DustfallNet.setRoom(name), room + '-alt');
         await wait(c, () => DustfallNet.peerCount() === 1);
         await wait(d, () => DustfallNet.peerCount() === 1);
-        assert.equal(await c.evaluate(() => DustfallNet.expedition().own), 0);
-        assert.equal(await c.evaluate(() => DustfallNet.expedition().complete), false);
-        assert.equal(await b.evaluate(() => DustfallNet.expedition().complete), true);
-        console.log('[OK] Cambio stanza e isolamento dei progressi fotografici.');
+        await b.evaluate(() => DustfallNet.poll());
+        await d.evaluate(() => DustfallNet.sendChat('Solo nella nuova stanza'));
+        await wait(c, () => DustfallNet.poll().includes('Solo nella nuova stanza'));
+        assert.equal(await b.evaluate(() => DustfallNet.poll().includes('Solo nella nuova stanza')), false);
+        console.log('[OK] Le stanze isolano presenze e messaggi.');
 
-        // Questa parte attraversa tastiera -> gameplay C++ -> ponte WASM -> MQTT.
+        // Input reale -> arma originale a energia -> ponte WASM -> altro browser.
         const observer = await makePage('Osservatore', room + '-shot');
         const game = await makePage('Gameplay', room + '-shot',
-            '--openworld --zone 0 --pos 0 76 --yaw 180 --pitch 0 --give all --name Collaudatore');
+            '--openworld --zone 0 --pos 0 76 --yaw 180 --pitch 45 --give all --name Collaudatore');
         await wait(game, () => document.documentElement.classList.contains('started') &&
-            DustfallNet.debug().self && DustfallNet.debug().self[11] === 1);
+            DustfallNet.debug().self && DustfallNet.debug().self[11] === 1 && DustfallNet.debug().self[8] >= 9);
         await game.locator('#canvas').focus();
-        // Mantieni il tasto fino a un fotogramma: il rendering software puo' essere lento.
-        await game.keyboard.down('5');
-        await wait(game, () => DustfallNet.debug().self[8] === 4);
-        await game.keyboard.up('5');
-        // Attendi anche la fine dell'animazione di equipaggiamento prima del clic.
         await settleInput(game);
-        const shot = await game.evaluate(() => ({ id: DustfallNet.selfId(), flash: DustfallNet.debug().self[9] }));
+        const shot = await game.evaluate(() => ({ id: DustfallNet.selfId(), flash: DustfallNet.debug().self[9], model: DustfallNet.debug().self[8] }));
         await game.mouse.move(640, 360);
         await game.mouse.down();
         try {
             await wait(game, before => DustfallNet.debug().self[9] > before, shot.flash);
         } catch (error) {
             console.error('Stato del giocatore:', await game.evaluate(() => DustfallNet.debug().self));
-            if (process.env.DUSTFALL_TEST_ARTIFACTS) {
-                fs.mkdirSync(process.env.DUSTFALL_TEST_ARTIFACTS, { recursive: true });
-                await game.screenshot({ path: path.join(process.env.DUSTFALL_TEST_ARTIFACTS, 'laser-failure.png') });
-            }
             throw error;
+        } finally {
+            await game.mouse.up();
         }
-        await game.mouse.up();
-        await wait(observer, ({ id, flash }) => {
+        await wait(observer, ({ id, flash, model }) => {
             const peer = DustfallNet.debug().peers[id];
-            return peer && peer.state && peer.state[8] === 4 && peer.state[9] > flash;
+            return peer && peer.state && peer.state[8] === model && peer.state[9] > flash;
         }, shot);
-        assert.equal(await game.evaluate(() => DustfallNet.debug().self[9]), shot.flash + 1);
+        console.log("[OK] Un vero colpo laser dell’arsenale originale raggiunge un altro browser tramite MQTT.");
+
+        async function quicksave() {
+            await game.evaluate(() => { try { Module.FS.unlink('/dustfall/saves-laser/slot6.sav'); } catch (_) {} });
+            await game.keyboard.down('F5');
+            await wait(game, () => Module.FS.analyzePath('/dustfall/saves-laser/slot6.sav').exists);
+            await game.keyboard.up('F5');
+            return game.evaluate(() => Module.FS.readFile('/dustfall/saves-laser/slot6.sav', { encoding: 'utf8' }));
+        }
+        await settleInput(game);
+        const save = await quicksave();
+        const lines = save.trim().split('\n');
+        assert.equal(lines[0], 'DUSTFALL_SAVE 3');
+        assert.ok(Number(lines[12].trim().split(/\s+/)[6]) > 0, 'il salvataggio conserva i colpi del vero combattimento');
+        console.log('[OK] Il browser salva il personaggio nel formato della campagna laser.');
         if (process.env.DUSTFALL_TEST_ARTIFACTS) {
             fs.mkdirSync(process.env.DUSTFALL_TEST_ARTIFACTS, { recursive: true });
             await game.screenshot({ path: path.join(process.env.DUSTFALL_TEST_ARTIFACTS, 'multiplayer.png') });
-        }
-        console.log('[OK] Un colpo reale del blaster attraversa il ponte WASM e raggiunge un altro browser tramite MQTT.');
-        async function quicksave() {
-            await game.evaluate(() => { try { Module.FS.unlink('/dustfall/saves/slot6.sav'); } catch (_) {} });
-            await game.keyboard.down('F5');
-            await wait(game, () => Module.FS.analyzePath('/dustfall/saves/slot6.sav').exists);
-            await game.keyboard.up('F5');
-            return game.evaluate(() => Module.FS.readFile('/dustfall/saves/slot6.sav', { encoding: 'utf8' }));
-        }
-        function rewardState(save) {
-            const lines = save.trim().split('\n');
-            assert.equal(lines[0], 'DUSTFALL_SAVE 2');
-            const inventory = lines[13].trim().split(/\s+/).map(Number);
-            let caps = 0;
-            for (let i = 1; i < inventory.length; i += 2) if (inventory[i] === 0) caps = inventory[i + 1];
-            const flags = Object.fromEntries(lines.slice(16, 16 + Number(lines[15])).map(line => line.trim().split(/\s+/)));
-            return { xp: Number(lines[8].trim().split(/\s+/)[1]), caps, round: Number(flags.expedition_reward_round || 0) };
-        }
-        const before = rewardState(await quicksave());
-        await game.evaluate(() => DustfallNet.expedition().targets.forEach(t => DustfallNet.expeditionPhoto(t.key)));
-        await settleInput(game);
-        const paid = rewardState(await quicksave());
-        assert.equal(paid.xp - before.xp, 120);
-        assert.equal(paid.caps - before.caps, 60);
-        assert.equal(paid.round, await game.evaluate(() => DustfallNet.expedition().round));
-        await settleInput(game);
-        assert.deepEqual(rewardState(await quicksave()), paid);
-        console.log('[OK] Il gameplay assegna 120 PE e 60 tappi una sola volta e salva il turno riscattato.');
-        if (process.env.DUSTFALL_TEST_ARTIFACTS) {
             await game.context().close();
             const mobile = await makePage('Touch', room + '-mobile',
                 '--openworld --zone 0 --pos 0 76 --yaw 180 --pitch 0 --give all --name Esploratrice', true);
-            await wait(mobile, () => document.documentElement.classList.contains('started') && DustfallNet.debug().self);
-            await mobile.keyboard.down('5');
-            await wait(mobile, () => DustfallNet.debug().self[8] === 4);
-            await mobile.keyboard.up('5');
+            await wait(mobile, () => document.documentElement.classList.contains('started') && DustfallNet.debug().self && DustfallNet.debug().self[8] >= 9);
             await settleInput(mobile);
             await mobile.screenshot({ path: path.join(process.env.DUSTFALL_TEST_ARTIFACTS, 'mobile.png') });
         }

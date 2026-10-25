@@ -55,7 +55,7 @@ static std::vector<MainItem> MainItems() {
 }
 
 static bool MainEnabled(const MainItem& it, bool hasSave) { return hasSave || (it.act != MA_CONTINUE && it.act != MA_LOAD); }
-static float MainY(int i) { return 350 + i * 48; }
+static float MainY(int i) { return 340 + i * 44; }
 static bool sNewOpenWorld = false; // la creazione del personaggio porta al mondo aperto
 
 void MenuUpdate() {
@@ -102,7 +102,7 @@ void MenuDraw() {
     const char* hint = sMenuSel < (int)items.size() && items[sMenuSel].act == MA_OPENWORLD ? "Parti subito da Ferrocittà ed esplora liberamente: è qui che si incontrano gli altri giocatori."
                        : sMenuSel < (int)items.size() && items[sMenuSel].act == MA_STORY ? "La storia completa: si comincia dentro il Rifugio 33, dal Sovrintendente." : "";
     UIText(hint, Wd / 2, 655, 16, ColAlpha(Col(230, 200, 150), 0.75f), 1);
-    UIText(DUSTFALL_WEB ? "v2.1 web  -  Avventura e combattimenti non letali, anche in compagnia" : "v2.1  -  Avventura post-apocalittica e combattimenti non letali", 20, 690, 15, ColAlpha(Col(230, 200, 150), 0.6f));
+    UIText(DUSTFALL_WEB ? "v1.0 laser web  -  Combattimento originale, stordimento permanente" : "v1.0 laser  -  Combattimento originale, stordimento permanente", 20, 690, 15, ColAlpha(Col(230, 200, 150), 0.6f));
     UIText("Frecce/Mouse + INVIO", Wd - 20, 690, 15, ColAlpha(Col(230, 200, 150), 0.6f), 2);
 }
 
@@ -295,7 +295,7 @@ void CreateDraw() {
         yy += 20;
         int saved[ST_COUNT];
         for (int i = 0; i < ST_COUNT; i++) { saved[i] = G.player.special[i]; G.player.special[i] = sCrSpecial[i]; }
-        UIText(Fmt("PF %d   PA %d   Peso max %d", (int)MaxHP(), (int)MaxAP(), (int)CarryMax()), dx, yy, 18, PIP);
+        UIText(Fmt("RES %d   PA %d   Peso max %d", (int)MaxHP(), (int)MaxAP(), (int)CarryMax()), dx, yy, 18, PIP);
         for (int i = 0; i < ST_COUNT; i++) G.player.special[i] = saved[i];
         UIText("Frecce: scegli e modifica   INVIO: conferma   ESC: indietro", Wd / 2, 680, 16, PIP_DIM, 1);
     } else {
@@ -413,7 +413,7 @@ void PauseUpdate() {
     switch (clicked) {
         case 0: SetGameState(GS_PLAY); break;
         case 1:
-            if (G.chased) { Notify("Non puoi salvare mentre qualcuno ti insegue.", Col(255, 160, 100)); break; }
+            if (G.inCombat) { Notify("Non puoi salvare mentre qualcuno ti insegue.", Col(255, 160, 100)); break; }
             SaveLoadOpen(true, GS_PAUSE);
             break;
         case 2: SaveLoadOpen(false, GS_PAUSE); break;
@@ -434,83 +434,49 @@ void PauseDraw() {
     UIText("PAUSA", Wd / 2, 150, 56, PIP, 1);
     const char* items[] = {"RIPRENDI", "SALVA PARTITA", "CARICA PARTITA", "OPZIONI", "MENU PRINCIPALE", NetAvailable() ? "MULTIGIOCATORE" : "ESCI DAL GIOCO"};
     for (int i = 0; i < 6; i++) MenuItem(items[i], Wd / 2, 250 + i * 54, 28, i == sMenuSel);
-    UIText("WASD muovi · Mouse guarda · E interagisci · 1-4 attrezzi · Clic usa l'attrezzo · Clic destro zoom · Q scanner · TAB Pip-Boy", Wd / 2, 600, 16, PIP_DIM, 1);
-    UIText("Shift corri · C accovacciati · Spazio salta · B esca · G barattolo · H kit medico · F mantello ottico · V visuale · L luce · F5/F9", Wd / 2, 624, 16, PIP_DIM, 1);
+    UIText("WASD muovi · Mouse mira · Clic laser · R ricarica · E interagisci · Q S.P.A.T. · TAB Pip-Boy", Wd / 2, 600, 16, PIP_DIM, 1);
+    UIText("Shift corri · C accovacciati · Spazio salta · G impulso EMP · H stimpak · V visuale · L luce · F5/F9", Wd / 2, 624, 16, PIP_DIM, 1);
     if (PlatformTouch()) UIText("Sul telefono: pollice sinistro per muoverti, dito a destra per guardare, pulsanti per tutto il resto.", Wd / 2, 576, 16, PIP, 1);
     if (NetAvailable()) UIText("Multigiocatore: T chat · Z saluta · P elenco dei giocatori · mappa del Pip-Boy per raggiungere un amico", Wd / 2, 648, 16, PIP_DIM, 1);
 }
 
 // ---------------------------------------------------------------------------
-//  Svenimento: nessuno muore nelle Terre Bruciate, al massimo ci si risveglia in clinica
+//  Incapacita' del giocatore
 // ---------------------------------------------------------------------------
-static float sFaintT = 0;
+static float sIncapacitatedT = 0;
 
-void FaintWakeUp() {
-    Player& P = G.player;
-    int lost = P.inv.Count(I_CAPS) / 10;
-    if (lost > 0) TakeItem(I_CAPS, lost);
-    P.rads *= 0.5f;
-    P.hp = HPCap() * 0.6f;
-    P.healOverTime = 0;
-    P.stealthT = 0;
-    P.catchImmune = 8;
-    P.vel = V3(0, 0, 0);
-    bool town = W.locations.size() > 1 && W.locations[1].discovered;
-    if (town) {
-        G.pendingZone = ZONE_WASTE;
-        G.pendingPos = V3(21, 0, 37);
-        G.pendingYaw = 0;
-        Notify(Fmt("Ti risvegli nella clinica di Ferrocittà. La dottoressa Rosi ti ha rimesso in piedi (onorario: %d tappi).", lost), Col(255, 230, 160));
-    } else {
-        G.pendingZone = ZONE_VAULT;
-        G.pendingPos = V3(18.7f, 0, 7);
-        G.pendingYaw = PI / 2;
-        Notify(Fmt("Ti risvegli nell'infermeria del Rifugio. Qualcuno ti ha riportato a casa (e ha preso %d tappi per il disturbo).", lost), Col(255, 230, 160));
-    }
-    G.fade = 0.001f;
-    G.timeOfDay += 6;
-    for (auto& e : G.ents)
-        if (e.ai == AI_CHASE || e.aware) {
-            e.aware = false;
-            e.alert = 0;
-            e.ai = AI_RETURN;
-        }
-    SetGameState(GS_PLAY);
-}
-
-void FaintUpdate() {
-    sFaintT += GetFrameTime();
-    if (sFaintT < 1.5f) return;
+void IncapacitatedUpdate() {
+    sIncapacitatedT += GetFrameTime();
+    if (sIncapacitatedT < 1.5f) return;
     float Wd = UIW();
     sMenuSel = VerticalNav(sMenuSel, 2);
     int clicked = -1;
     for (int i = 0; i < 2; i++)
-        if (UIHover(Wd / 2 - 220, 420 + i * 56 - 4, 440, 42)) {
+        if (UIHover(Wd / 2 - 200, 420 + i * 56 - 4, 400, 42)) {
             if (Vector2Length(GetMouseDelta()) > 0) sMenuSel = i;
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) clicked = i;
         }
     if (Confirm()) clicked = sMenuSel;
     if (clicked == 0) {
-        sFaintT = 0;
-        sMenuSel = 0;
-        FaintWakeUp();
-    } else if (clicked == 1) {
         int s = NewestSave();
-        sFaintT = 0;
+        sIncapacitatedT = 0;
+        if (s < 0 || !LoadGame(s)) SetGameState(GS_MENU);
+    } else if (clicked == 1) {
+        sIncapacitatedT = 0;
         sMenuSel = 0;
-        if (s < 0 || !LoadGame(s)) FaintWakeUp();
+        SetGameState(GS_MENU);
     }
 }
 
-void FaintDraw() {
+void IncapacitatedDraw() {
     float Wd = UIW();
-    float a = Clamp01(sFaintT / 1.5f);
-    UIRect(0, 0, Wd, 720, Color{10, 8, 6, (unsigned char)(220 * a)});
-    UIText("HAI PERSO I SENSI", Wd / 2, 220, 64, ColAlpha(Col(255, 210, 150), a), 1);
-    UIText("La fatica, il caldo e le radiazioni hanno avuto la meglio. Per fortuna, qualcuno ti ha trovato.", Wd / 2, 320, 20, ColAlpha(Col(230, 210, 180), a), 1);
-    if (sFaintT >= 1.5f) {
-        MenuItem("RISVEGLIATI", Wd / 2, 420, 28, sMenuSel == 0);
-        MenuItem("CARICA L'ULTIMO SALVATAGGIO", Wd / 2, 476, 28, sMenuSel == 1);
+    float a = Clamp01(sIncapacitatedT / 1.5f);
+    UIRect(0, 0, Wd, 720, Color{0, 15, 28, (unsigned char)(200 * a)});
+    UIText("PRIVO DI SENSI", Wd / 2, 220, 72, ColAlpha(Col(255, 90, 70), a), 1);
+    UIText("Sei stato messo fuori combattimento. Riparti dall'ultimo salvataggio.", Wd / 2, 320, 22, ColAlpha(Col(230, 200, 180), a), 1);
+    if (sIncapacitatedT >= 1.5f) {
+        MenuItem("CARICA L'ULTIMO SALVATAGGIO", Wd / 2, 420, 28, sMenuSel == 0);
+        MenuItem("MENU PRINCIPALE", Wd / 2, 476, 28, sMenuSel == 1);
     }
 }
 
@@ -523,27 +489,24 @@ void EndingStart() {
     Player& P = G.player;
     sEndSlides.clear();
     sEndSlides.push_back("Il reattore del Rifugio 33 tornò a ronzare. Per la prima volta da anni le luci dei corridoi smisero di tremare, e i bambini del Rifugio impararono che cosa fosse il silenzio di una macchina sana.");
-    int deal = G.flags["boss_deal"];
-    if (deal == 3)
-        sEndSlides.push_back("Teschio passò l'inverno ad ascoltare \"Swing sotto la luna atomica\". Si dice che la banda dei Teschi, a forza di ballare, abbia smesso di chiedere pedaggi alle carovane.");
-    else if (deal == 1)
-        sEndSlides.push_back("Le parole del Rifugiato fecero breccia nel cuore di Teschio. La sua banda iniziò a scortare le carovane invece di spennarle, in cambio di acqua pulita.");
-    else if (deal == 2)
-        sEndSlides.push_back("Con un bel mucchio di tappi in tasca, Teschio si comprò una radio nuova. I Teschi restarono rumorosi e territoriali, ma Ferrocittà imparò a conviverci.");
+    if ((G.flags["boss_stunned"] || G.flags["boss_dead"]))
+        sEndSlides.push_back("Con Teschio definitivamente fuori combattimento, i predoni si dispersero. Le carovane tornarono a raggiungere Ferrocittà, che crebbe fino a diventare il mercato più prospero della regione.");
     else
-        sEndSlides.push_back("Teschio e i suoi restarono padroni del covo, gelosi dei loro rottami. Ma nelle Terre Bruciate si seppe che un abitante dei Rifugi aveva superato i predoni e raggiunto i laboratori della Base Delta-9.");
+        sEndSlides.push_back("I predoni di Teschio continuarono a tormentare le carovane. Ferrocittà sopravvisse, ma dietro mura sempre più alte e sempre più povere.");
     if (QUESTS[Q_MEDS].done)
         sEndSlides.push_back("Grazie alle medicine recuperate, la clinica della dottoressa Rosi salvò decine di vite durante l'inverno delle febbri.");
     else
-        sEndSlides.push_back("Senza medicine, l'inverno delle febbri fu duro per Ferrocittà. La dottoressa Rosi lavorò giorno e notte, con quel poco che aveva.");
-    if (QUESTS[Q_BEAST].done)
-        sEndSlides.push_back("L'artiglio dello Squarciatore divenne il trofeo più discusso di Ferrocittà. Jack Falco raccontò a tutti di come il Rifugiato avesse affrontato la bestia e l'avesse messa fuori combattimento. La leggenda sopravvisse allo scontro.");
+        sEndSlides.push_back("Senza medicine, l'inverno delle febbri fu crudele con Ferrocittà. La dottoressa Rosi non dimenticò mai i nomi di chi non riuscì a salvare.");
+    if (QUESTS[Q_BEAST].done || (FindEntityByTag("beast") && FindEntityByTag("beast")->stunned))
+        sEndSlides.push_back("La gola dello Squarciatore divenne una via sicura verso nord. Jack Falco appese il suo fucile al chiodo e aprì una locanda all'ingresso del canalone.");
     else
-        sEndSlides.push_back("Lo Squarciatore continuò a dormire nella gola a nord-ovest. Di notte il suo russare si sentiva fino alle mura di Ferrocittà, e i bambini giuravano che fosse un tuono.");
+        sEndSlides.push_back("Nessuno osò più avventurarsi nella gola a nord-ovest. Di notte, il ruggito dello Squarciatore si sentiva fino alle mura di Ferrocittà.");
     if (P.karma >= 50)
-        sEndSlides.push_back("E " + P.name + "? Nelle Terre Bruciate si raccontano ancora storie del Rifugiato che affrontò predoni e sentinelle, portò la luce sotto la montagna e lasciò una speranza in superficie.");
+        sEndSlides.push_back("E " + P.name + "? Nelle Terre Bruciate si raccontano ancora storie del Rifugiato che portò la luce sotto la montagna e la speranza in superficie.");
+    else if (P.karma <= -50)
+        sEndSlides.push_back("E " + P.name + "? Il Rifugio fu salvo, ma in superficie il suo nome divenne sinonimo di paura. I suoi impulsi avevano lasciato molti viandanti fuori combattimento.");
     else
-        sEndSlides.push_back("E " + P.name + "? Salvato il Rifugio, il Rifugiato tornò a guardare l'orizzonte arancione con il blaster al fianco. Le Terre Bruciate avevano ancora molte storie da raccontare.");
+        sEndSlides.push_back("E " + P.name + "? Salvato il Rifugio, il Rifugiato tornò a guardare l'orizzonte arancione. Le Terre Bruciate avevano ancora molte storie da raccontare.");
     G.endingSlide = 0;
     G.endingT = 0;
     SetGameState(GS_ENDING);
@@ -595,7 +558,7 @@ void EndingDraw() {
     Player& P = G.player;
     UIText("FINE", Wd / 2, 90, 80, txt, 1);
     UIText("Grazie per aver giocato a DUSTFALL", Wd / 2, 200, 24, txt, 1);
-    std::string stats = Fmt("Livello %d    Foto %d    Missioni completate %d    Volte scoperto %d    Karma %d", P.level, (int)P.photos.size(), P.questsDone, P.timesCaught, P.karma);
+    std::string stats = Fmt("Livello %d    Avversari storditi %d    Missioni completate %d    Karma %d", P.level, P.incapacitations, P.questsDone, P.karma);
     UIText(stats, Wd / 2, 270, 20, ColAlpha(txt, 0.8f), 1);
     UIText(Fmt("Tempo di gioco: %dh %02dm", (int)(P.playTime / 3600), ((int)P.playTime / 60) % 60), Wd / 2, 304, 20, ColAlpha(txt, 0.8f), 1);
     MenuItem("CONTINUA A ESPLORARE", Wd / 2, 540, 28, sMenuSel == 0);

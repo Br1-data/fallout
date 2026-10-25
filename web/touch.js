@@ -119,19 +119,20 @@
     root.id = 'touch';
     // b: [etichetta, classi, azione]  azione: 'k:tasto' | 'm:pulsante' | 'w:verso' | 'a:speciale'
     var BUTTONS = [
-        ['USA', 'big use play', 'm:0'], ['E', 'mid act play', 'k:e'], ['SALTA', 'mid jump play', 'k:space'],
-        ['ACCOV.', 'mid crouch play', 'k:c'], ['ZOOM', 'mid zoom play', 'm:2'],
-        ['&#9776;', 'sm r0 c0 play scan', 'k:esc'], ['PIP-BOY', 'sm r1 c0 play', 'k:tab'], ['SCANNER', 'sm r2 c0 play', 'k:q'],
-        ['CHAT', 'sm r3 c0 play', 'a:chat'], ['ATTREZZO', 'sm r0 c1 play', 'w:1'], ['ESCA', 'sm r1 c1 play', 'k:b'],
-        ['BARATTOLO', 'sm r2 c1 play', 'k:g'], ['SALUTA', 'sm r3 c1 play', 'k:z'], ['KIT', 'sm r0 c2 play', 'k:h'],
-        ['MANTELLO', 'sm r1 c2 play', 'k:f'], ['VISTA', 'sm r2 c2 play', 'k:v'], ['LUCE', 'sm r3 c2 play', 'k:l'],
-        ['GIOCATORI', 'sm r4 c0 play', 'k:p'],
-        ['CHIUDI', 'mid close scan', 'k:q'],
+        ['SPARA', 'big use play', 'm:0'], ['E', 'mid act play', 'k:e'], ['SALTA', 'mid jump play', 'k:space'],
+        ['ACCOV.', 'mid crouch play', 'k:c'], ['MIRA', 'mid zoom play', 'm:2'],
+        ['&#9776;', 'sm r0 c0 play scan', 'k:esc'], ['PIP-BOY', 'sm r1 c0 play', 'k:tab'], ['S.P.A.T.', 'sm r2 c0 play', 'k:q'],
+        ['CHAT', 'sm r3 c0 play', 'a:chat'], ['ARMA', 'sm r0 c1 play', 'w:1'], ['RICARICA', 'sm r1 c1 play', 'k:r'],
+        ['EMP', 'sm r2 c1 play', 'k:g'], ['SALUTA', 'sm r3 c1 play', 'k:z'], ['STIMPAK', 'sm r0 c2 play', 'k:h'],
+        ['VISTA', 'sm r2 c2 play', 'k:v'], ['LUCE', 'sm r3 c2 play', 'k:l'], ['GIOCATORI', 'sm r4 c0 play', 'k:p'],
+        ['ESCI', 'mid close scan', 'k:esc'], ['ESEGUI', 'big use scan', 'k:enter'], ['ACCODA', 'mid act scan', 'k:e'],
+        ['ANNULLA', 'sm r0 c2 scan', 'm:2'], ['BERS. &#9664;', 'sm r1 c1 scan', 'k:a'], ['BERS. &#9654;', 'sm r2 c1 scan', 'k:d'],
+        ['PARTE &#9650;', 'sm r1 c2 scan', 'k:w'], ['PARTE &#9660;', 'sm r2 c2 scan', 'k:s'],
         ['GIRA', 'big use pick', 'k:space'], ['ESCI', 'mid close pick', 'k:esc'],
         ['&#9650;', 'pad pu menu pip', 'k:up'], ['&#9660;', 'pad pd menu pip', 'k:down'],
         ['&#9664;', 'pad pl menu pip', 'k:left'], ['&#9654;', 'pad pr menu pip', 'k:right'],
         ['OK', 'pad ok menu pip', 'k:enter'], ['INDIETRO', 'pad back menu', 'k:esc'], ['CHIUDI', 'pad back pip', 'k:tab'],
-        ['SCHEDA &#9664;', 'pad tl pip', 'k:q'], ['SCHEDA &#9654;', 'pad tr pip', 'k:e']
+        ['TUTTO', 'pad tl menu', 'k:r'], ['SCHEDA &#9664;', 'pad tl pip', 'k:q'], ['SCHEDA &#9654;', 'pad tr pip', 'k:e']
     ];
     var html = '<div id="t-look"></div><div id="t-move"></div><div id="t-stick"><div></div></div>';
     BUTTONS.forEach(function (b, i) { html += '<button type="button" class="tb ' + b[1] + '" data-i="' + i + '">' + b[0] + '</button>'; });
@@ -237,7 +238,7 @@
     root.addEventListener('touchend', touchEnd);
     root.addEventListener('touchcancel', touchEnd);
 
-    // --- modi: 0 nessuno, 1 menu, 2 gioco, 3 scanner, 4 scasso, 5 Pip-Boy
+    // --- modi: 0 nessuno, 1 menu, 2 gioco, 3 S.P.A.T., 4 scasso, 5 Pip-Boy
     var MODES = ['none', 'menu', 'play', 'scan', 'pick', 'pip'];
     var mode = -1;
     M.dfTouchMode = function (m) {

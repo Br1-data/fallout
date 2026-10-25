@@ -1,4 +1,4 @@
-// Protocollo delle spedizioni: browser isolati, canale locale e orologio controllato.
+// Protocollo multigiocatore: presenza, stato degli avatar, chat e isolamento delle stanze.
 // Eseguire con: node --test tools/net_expedition_test.js
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -8,7 +8,6 @@ const path = require('node:path');
 const { webcrypto } = require('node:crypto');
 
 const source = fs.readFileSync(path.join(__dirname, '../web/net.js'), 'utf8');
-const ROUND_MS = 720000;
 const plain = value => JSON.parse(JSON.stringify(value));
 
 class Network {
@@ -48,7 +47,6 @@ class Network {
         api.setProfile(JSON.stringify({n: name, l: 1, f: 0, o: 0, w: 'Ferrocittà'}));
         const client = {
             api, owned, timers, closed: false,
-            view: () => plain(api.expedition()),
             close: () => {
                 listeners.pagehide();
                 owned.forEach(channel => channel.close());
@@ -79,122 +77,94 @@ class Network {
     }
 }
 
-test('fotografie fresche, obiettivi condivisi, contributi personali e doppioni', () => {
+
+const state = (model = 10, flash = 0, x = 1) => [0, x, 2, 3, 0, 0, 0, 0, model, flash, 0, 1];
+
+test('due browser scoprono profili e modelli laser originali', () => {
     const n = new Network(), a = n.peer('Ada'), b = n.peer('Bruno');
     n.flush();
-    const targets = a.view().targets.map(t => t.key);
-    assert.equal(new Set(targets).size, 3);
-    assert.deepEqual(targets, b.view().targets.map(t => t.key));
-    assert.equal(a.api.expeditionPhoto('mk5'), false);
-    assert.equal(a.api.expeditionPhoto(targets[0]), true);
-    assert.equal(a.api.expeditionPhoto(targets[0]), false);
-    n.flush();
-    assert.equal(b.view().targets[0].done, true);
-    assert.equal(b.view().targets[0].by, 'Ada');
-    assert.equal(a.view().own, 1);
-    assert.equal(b.view().own, 0);
-    assert.equal(b.api.expeditionPhoto(targets[0]), true, 'si può contribuire anche a un obiettivo già trovato');
-    b.api.expeditionPhoto(targets[1]);
-    b.api.expeditionPhoto(targets[2]);
-    n.flush();
-    assert.equal(a.view().complete, true);
-    assert.equal(b.view().complete, true);
-    assert.deepEqual(a.view().contributors.map(c => c.count), [3, 1]);
-    n.tick();
-    assert.equal(a.view().contributors.length, 2);
-    assert.equal(b.view().own, 3);
-    const copy = a.api.expedition();
-    copy.targets[0].key = 'falso'; copy.contributors[0].count = 999;
-    assert.equal(a.view().targets[0].key, targets[0]);
-    assert.equal(a.view().contributors[0].count, 3);
+    assert.equal(a.api.peerCount(), 1);
+    assert.equal(b.api.peerCount(), 1);
+    assert.equal(a.api.status(), 2);
+    a.api.sendState(state(10, 1, 12.345)); n.flush();
+    const peer = plain(b.api.debug().peers)[a.api.selfId()];
+    assert.equal(peer.profile.n, 'Ada');
+    assert.equal(peer.state[1], 12.35);
+    assert.equal(peer.state[8], 10, 'il fucile laser non viene troncato al vecchio massimo 4');
+    assert.equal(peer.state[9], 1);
+    assert.ok(b.api.poll().includes('S\t' + a.api.selfId()));
 });
 
-test('ingresso tardivo e uscita del primo fotografo conservano il lavoro della squadra', () => {
-    const n = new Network(), a = n.peer('Ada'), b = n.peer('Bruno');
-    n.flush();
-    const targets = a.view().targets.map(t => t.key);
-    a.api.expeditionPhoto(targets[0]); b.api.expeditionPhoto(targets[1]);
-    n.flush(); a.close(); n.flush();
-    const c = n.peer('Carla'); n.flush();
-    assert.equal(c.view().targets.filter(t => t.done).length, 2);
-    assert.equal(c.view().own, 0);
-    assert.ok(c.view().contributors.some(p => p.name === 'Ada'));
-    c.api.expeditionPhoto(targets[2]); n.flush();
-    assert.equal(b.view().complete, true);
-    assert.equal(c.view().complete, true);
-});
-
-test('heartbeat recupera una fotografia persa dal trasporto', () => {
-    const n = new Network(), a = n.peer('Ada'), b = n.peer('Bruno');
-    n.flush();
-    a.api.expeditionPhoto(a.view().targets[0].key);
-    n.pending.length = 0; // pacchetto QoS 0 perso
-    assert.equal(b.view().targets.some(t => t.done), false);
-    n.tick();
-    assert.equal(b.view().targets.filter(t => t.done).length, 1);
-});
-
-test('cambio stanza e rete disattivata non importano progressi o eventi precedenti', () => {
-    const n = new Network(), a = n.peer('Ada'), b = n.peer('Bruno');
-    n.flush();
-    a.api.expeditionPhoto(a.view().targets[0].key); n.flush();
-    b.api.sendChat('messaggio della vecchia stanza'); n.flush();
-    const stale = n.sent.findLast(m => m.t === 'ex' && m.d.c.length);
-    a.api.setRoom('altra-stanza');
+test('stato aggiornato una volta, duplicati e pacchetti vecchi non lo sovrascrivono', () => {
+    const n = new Network(), a = n.peer('Ada'); n.flush(); a.api.poll();
+    n.inject(a, {u:'bruno',s:100,t:'st',d:state(13, 2, 20)});
+    n.inject(a, {u:'bruno',s:99,t:'st',d:state(1, 0, -20)});
+    n.inject(a, {u:'bruno',s:100,t:'st',d:state(2, 0, -30)});
+    const peer = plain(a.api.debug().peers).bruno;
+    assert.equal(peer.state[1], 20);
+    assert.equal(peer.state[8], 13);
+    assert.equal(peer.state[9], 2);
+    assert.equal(a.api.poll().split('\n').filter(l => l.startsWith('S\t')).length, 1);
     assert.equal(a.api.poll(), '');
-    assert.equal(a.view().own, 0);
-    n.inject(a, {...stale, u: 'vecchio', s: 99999});
-    assert.equal(a.view().contributors.length, 0);
-    const c = n.peer('Carla', 'altra-stanza'); n.flush();
-    assert.deepEqual(a.view().targets, c.view().targets);
+});
+
+test('stato remoto resta entro i limiti e gli identificativi non alterano il prototipo', () => {
+    const n = new Network(), a = n.peer('Ada'); n.flush();
+    n.inject(a, {u:'__proto__',s:1,t:'st',d:state()});
+    assert.equal(a.api.peerCount(), 0);
+    n.inject(a, {u:'constructor',s:1,t:'st',d:[9,1e8,-1e8,1e8,90,-90,80,7,99,1e9,-4,9]});
+    const peer = plain(a.api.debug().peers).constructor;
+    assert.deepEqual(peer.state, [2,2000,-500,2000,10,-2,30,1,13,1000000,0,1]);
+    n.inject(a, {u:'constructor',s:2,t:'st',d:[]});
+    assert.deepEqual(plain(a.api.debug().peers).constructor.state, peer.state);
+});
+
+test('chat e saluti si ricevono una volta con pulizia del testo e anti-spam', () => {
+    const n = new Network(), a = n.peer('Ada'), b = n.peer('Bruno'); n.flush(); a.api.poll();
+    b.api.sendChat('  Ciao\t\n  Ada!  '); b.api.sendEmote(1); n.flush();
+    let events = a.api.poll();
+    assert.ok(events.includes('C\t' + b.api.selfId() + '\tCiao Ada!'));
+    assert.ok(events.includes('E\t' + b.api.selfId() + '\t1'));
+    for (let i=0;i<8;i++) n.inject(a, {u:'spam',s:i+1,t:'ch',d:'Messaggio '+i});
+    events = a.api.poll();
+    assert.equal(events.split('\n').filter(l => l.startsWith('C\tspam\t')).length, 6);
+});
+
+test('nuovo arrivato riceve lo stato corrente e uscita rimuove la presenza', () => {
+    const n = new Network(), a = n.peer('Ada'), b = n.peer('Bruno'); n.flush();
+    a.api.sendState(state(11, 4)); n.flush();
+    const c = n.peer('Carla'); n.flush();
+    assert.equal(plain(c.api.debug().peers)[a.api.selfId()].state[9], 4);
+    a.close(); n.flush();
+    assert.equal(c.api.peerCount(), 1);
+    assert.equal(b.api.peerCount(), 1);
+    assert.equal(plain(c.api.debug().peers)[a.api.selfId()], undefined);
+});
+
+test('cambiare stanza cancella eventi e vecchi compagni, rete off non trasmette', () => {
+    const n = new Network(), a = n.peer('Ada'), b = n.peer('Bruno'); n.flush();
+    b.api.sendChat('Vecchia stanza'); n.flush();
+    a.api.setRoom('altra');
+    assert.equal(a.api.poll(), '');
+    assert.equal(a.api.peerCount(), 0);
+    const c = n.peer('Carla', 'altra'); n.flush();
+    assert.equal(a.api.peerCount(), 1);
+    c.api.sendChat('Nuova stanza'); n.flush();
+    assert.ok(a.api.poll().includes('Nuova stanza'));
+    assert.equal(b.api.poll().includes('Nuova stanza'), false);
     const off = n.peer('Offline', 'squadra', 'off'); n.flush();
-    assert.equal(off.api.expeditionPhoto(off.view().targets[0].key), false);
-    assert.equal(off.view().own, 0);
-    assert.equal(off.view().complete, false);
+    assert.equal(off.api.status(), 0);
+    assert.equal(off.api.peerCount(), 0);
+    const sent=n.sent.length;
+    off.api.sendState(state()); off.api.sendChat('silenzio'); off.api.sendEmote(1); n.flush();
+    assert.equal(n.sent.length, sent);
 });
 
-test('nuovo round azzera i contributi e respinge fotografie del round scaduto', () => {
-    const n = new Network(), a = n.peer('Ada'), b = n.peer('Bruno');
-    n.flush();
-    a.api.expeditionPhoto(a.view().targets[0].key); n.flush();
-    const stale = n.sent.findLast(m => m.t === 'ex' && m.d.c.length), oldRound = a.view().round;
-    n.tick(ROUND_MS);
-    assert.equal(a.view().round, oldRound + 1);
-    assert.equal(a.view().own, 0);
-    assert.equal(a.view().complete, false);
-    assert.equal(a.view().seconds, 719);
-    n.inject(b, {...stale, s: 999999});
-    assert.equal(b.view().contributors.length, 0);
-    assert.deepEqual(a.view().targets, b.view().targets);
-});
-
-test('payload malformati, identità locali falsificate e dati fuori tempo sono respinti', () => {
+test('presenza silenziosa scade mentre un nuovo heartbeat la mantiene viva', () => {
     const n = new Network(), a = n.peer('Ada'); n.flush();
-    const state = a.view(), key = state.targets[0].key;
-    const good = {r: state.round, room: 'squadra', c: [{u: 'bruno', n: 'Bruno', p: [{k: key, t: n.now}]}]};
-    const bad = [null, {}, {...good, r: state.round - 1}, {...good, room: 'altrove'},
-        {...good, c: Array(65).fill(good.c[0])}, {...good, c: [{...good.c[0], u: a.api.selfId()}]},
-        {...good, c: [{...good.c[0], u: '__proto__'}]},
-        {...good, c: [{...good.c[0], p: [{k: 'mk5', t: n.now}]}]},
-        {...good, c: [{...good.c[0], p: [{k: key, t: n.now + 6000}]}]},
-        {...good, c: [{...good.c[0], p: [{k: key, t: state.round * ROUND_MS - 1}]}]},
-        {...good, c: [{...good.c[0], p: [{k: key, t: 'ora'}]}]}];
-    bad.forEach((data, i) => n.inject(a, {u: 'bruno', s: i + 1, t: 'ex', d: data}));
-    assert.equal(a.view().own, 0);
-    assert.equal(a.view().contributors.length, 0);
-    n.inject(a, {u: 'bruno', s: 100, t: 'ex', d: good});
-    assert.equal(a.view().targets[0].done, true);
-    assert.equal(a.view().own, 0);
-});
-
-test('memoria limitata con un posto garantito per il contributo locale', () => {
-    const n = new Network(), a = n.peer('Ada'); n.flush();
-    const state = a.view(), key = state.targets[0].key;
-    for (let i = 0; i < 100; i++) n.inject(a, {u: 'relay', s: i + 1, t: 'ex', d: {
-        r: state.round, room: 'squadra', c: [{u: 'peer' + i, n: 'Viandante', p: [{k: key, t: n.now}]}]
-    }});
-    assert.equal(a.view().contributors.length, 63);
-    assert.equal(a.api.expeditionPhoto(key), true);
-    assert.equal(a.view().contributors.length, 64);
-    assert.equal(a.view().own, 1);
+    n.inject(a, {u:'bruno',s:1,t:'hb',d:{n:'Bruno',l:1,o:0,w:'Covo'}});
+    assert.equal(a.api.peerCount(), 1);
+    n.tick(13000);
+    assert.equal(a.api.peerCount(), 0);
+    assert.ok(a.api.poll().includes('L\tbruno'));
 });

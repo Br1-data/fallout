@@ -15,19 +15,6 @@ static bool sShowList = false;
 static int sWaveN = 0;
 static float sLocalWave = 0;
 
-struct ExpeditionTarget { std::string key, by; bool done = false; };
-struct ExpeditionContributor { std::string name; int count = 0; };
-struct Expedition {
-    int round = 0, seconds = 0, own = 0;
-    bool complete = false;
-    std::vector<ExpeditionTarget> targets;
-    std::vector<ExpeditionContributor> contributors;
-};
-static Expedition sExpedition;
-#if DUSTFALL_WEB
-static float sExpeditionT = 0;
-#endif
-
 static const Color CHAT_OTHER = {255, 225, 150, 255};
 static const Color CHAT_SYS = {150, 200, 160, 255};
 
@@ -68,20 +55,6 @@ EM_JS(char*, js_net_room, (), {
 });
 EM_JS(void, js_net_chat, (const char* t), { DustfallNet.sendChat(UTF8ToString(t)); });
 EM_JS(void, js_net_emote, (int e), { DustfallNet.sendEmote(e); });
-EM_JS(int, js_net_photo, (const char* key), {
-    return DustfallNet.expeditionPhoto ? DustfallNet.expeditionPhoto(UTF8ToString(key)) : 0;
-});
-EM_JS(char*, js_net_expedition, (), {
-    if (!DustfallNet.expedition || DustfallNet.status() === 0) return 0;
-    var e = DustfallNet.expedition();
-    var clean = function(s) { return String(s || "").split("").map(function(c) { return c.charCodeAt(0) < 32 ? " " : c; }).join(""); };
-    var fields = [e.round, e.seconds, e.complete ? 1 : 0, e.own];
-    e.targets.forEach(function(t) { fields.push(clean(t.key), t.done ? 1 : 0, clean(t.by)); });
-    e.contributors.slice(0, 3).forEach(function(c) { fields.push(clean(c.name), c.count); });
-    var s = fields.join(String.fromCharCode(9)), n = lengthBytesUTF8(s) + 1, p = _malloc(n);
-    stringToUTF8(s, p, n);
-    return p;
-});
 EM_JS(int, js_net_status, (), { return DustfallNet.status(); });
 EM_JS(int, js_net_rtt, (const char* id), { return DustfallNet.rtt(UTF8ToString(id)); });
 EM_JS(int, js_net_direct, (const char* id), { return DustfallNet.via(UTF8ToString(id)) === 'diretto' ? 1 : 0; });
@@ -148,20 +121,7 @@ static void AddChat(const std::string& text, Color col) {
     if (sChat.size() > 40) sChat.erase(sChat.begin());
 }
 
-static bool LocalInGame() { return G.state != GS_MENU && G.state != GS_INTRO && G.state != GS_CREATE; }
-
-bool NetPhoto(const std::string& key) {
-#if DUSTFALL_WEB
-    if (sAvail && js_net_photo(key.c_str())) {
-        int pi = PhotoIndex(key);
-        Notify("Spedizione: foto condivisa di " + (pi >= 0 ? std::string(PHOTO_SUBJECTS[pi].name) : key) + "!", CHAT_OTHER);
-        PlaySfx(SFX_UI_OK, 0.6f);
-        sExpeditionT = 0;
-        return true;
-    }
-#endif
-    return false;
-}
+static bool LocalInGame() { return G.state != GS_MENU && G.state != GS_INTRO && G.state != GS_CREATE && G.state != GS_INCAPACITATED; }
 
 #if DUSTFALL_WEB
 static int sFlashN = 0;
@@ -208,41 +168,6 @@ static std::vector<std::string> Split(const std::string& s, char sep) {
     return out;
 }
 
-static void UpdateExpedition(float dt) {
-    sExpeditionT -= dt;
-    if (sExpeditionT > 0) return;
-    sExpeditionT = 0.5f;
-    auto fields = Split(TakeJsString(js_net_expedition()), '\t');
-    if (fields.size() < 13) { sExpedition = Expedition(); return; }
-    Expedition e;
-    e.round = atoi(fields[0].c_str());
-    e.seconds = Clamp(atoi(fields[1].c_str()), 0, 720);
-    e.complete = fields[2] == "1";
-    e.own = Clamp(atoi(fields[3].c_str()), 0, 3);
-    for (int i = 0; i < 3; i++) {
-        const std::string& key = fields[4 + i * 3];
-        if (PhotoIndex(key) < 0) { sExpedition = Expedition(); return; }
-        e.targets.push_back({key, fields[6 + i * 3], fields[5 + i * 3] == "1"});
-    }
-    for (size_t i = 13; i + 1 < fields.size(); i += 2)
-        e.contributors.push_back({fields[i], Clamp(atoi(fields[i + 1].c_str()), 0, 3)});
-    bool changed = sExpedition.round != e.round;
-    sExpedition = e;
-    if (changed && (G.state == GS_PLAY || G.state == GS_CHAT))
-        AddChat("Nuova spedizione fotografica! Tre luoghi da immortalare insieme prima del prossimo segnale.", CHAT_SYS);
-    // Il numero del turno è globale: cambiare stanza non permette di riscuotere due volte.
-    // Il flag viene già conservato dal normale salvataggio del personaggio.
-    if (e.complete && e.own > 0 && e.round > G.flags["expedition_reward_round"] &&
-        (G.state == GS_PLAY || G.state == GS_CHAT)) {
-        G.flags["expedition_reward_round"] = e.round;
-        GiveXP(120, "Spedizione fotografica");
-        GiveItem(I_CAPS, 60, false);
-        BigNotify("SPEDIZIONE RIUSCITA!", "La squadra ha raccolto le tre foto. Premio: 120 PE e 60 tappi.");
-        PlaySfx(SFX_DISCOVER, 0.7f);
-        AddChat("Spedizione riuscita! Hai contribuito: ricevuti 120 PE e 60 tappi.", CHAT_OTHER);
-    }
-}
-
 static std::string JsonStr(const std::string& s) {
     std::string o = "\"";
     for (unsigned char c : s) {
@@ -279,7 +204,7 @@ static void HandleEvent(const std::string& line) {
         r.name = f[2];
         r.level = atoi(f[3].c_str());
         r.female = atoi(f[4].c_str()) != 0;
-        r.outfit = Clamp(atoi(f[5].c_str()), 0, OF_DARK);
+        r.outfit = Clamp(atoi(f[5].c_str()), 0, OF_BARMAN);
         r.where = f[6];
         UpdateLook(r);
         if (!r.announced) AddChat(r.name + " è nelle Terre Bruciate (" + r.where + ").", CHAT_SYS);
@@ -298,20 +223,20 @@ static void HandleEvent(const std::string& line) {
         r.netYaw = v[4];
         r.speed = Clamp(v[6], 0.0f, 20.0f);
         r.crouch = v[7] > 0.5f;
-        r.tool = Clamp((int)v[8], 0, TOOL_COUNT - 1);
+        r.weaponModel = Clamp((int)v[8], 0, WM_GRENADE);
         int flashN = (int)v[9], waveN = (int)v[10];
         r.inGame = v[11] > 0.5f;
         bool near = r.inGame && zone == G.player.zone && Vector3Distance(p, G.player.pos) < 60 && LocalInGame();
         if (r.flashN >= 0 && flashN != r.flashN) {
             r.flashT = 0.25f;
-            if (r.tool == TOOL_BLASTER && r.zone == G.player.zone) {
+            if (r.weaponModel != WM_FIST && r.zone == G.player.zone) {
                 Vector3 origin = p + V3(0, 1.45f, 0);
                 Vector3 direction = V3(cosf(v[5]) * sinf(v[4]), sinf(v[5]), cosf(v[5]) * cosf(v[4]));
                 RayHit hit{};
                 float distance = RaycastWorld(r.zone, origin, direction, 95, hit) ? hit.t : 95;
-                SpawnLaser(r.zone, origin, origin + direction * distance);
+                SpawnTracer(r.zone, origin, origin + direction * distance, Col(80, 235, 255), 0.035f, 0.16f);
             }
-            if (near) PlaySfx3D(r.tool == TOOL_BLASTER ? SFX_LASER : SFX_SHUTTER, p + V3(0, 1.6f, 0), 0.7f);
+            if (near) PlaySfx3D(SFX_LASER, p + V3(0, 1.6f, 0), 0.7f);
         }
         if (r.waveN >= 0 && waveN != r.waveN) r.waveT = 2.4f;
         r.flashN = flashN;
@@ -365,7 +290,7 @@ void NetUpdate(float dt) {
     if (flash && !sPrevFlash) sFlashN++;
     sPrevFlash = flash;
     float st[12] = {(float)P.zone, P.pos.x, P.pos.y, P.pos.z, P.yaw, P.pitch, Vector3Length(V3(P.vel.x, 0, P.vel.z)), P.crouch ? 1.0f : 0.0f,
-                    (float)P.tool, (float)sFlashN, (float)sWaveN, inGame ? 1.0f : 0.0f};
+                    (float)CurrentWeapon().model, (float)sFlashN, (float)sWaveN, inGame ? 1.0f : 0.0f};
     js_net_state(st);
     std::string typed;
     if (PlatformTakeText("chat", typed) && !typed.empty()) {
@@ -376,7 +301,6 @@ void NetUpdate(float dt) {
     if (!events.empty())
         for (auto& line : Split(events, '\n')) HandleEvent(line);
     sStatus = js_net_status();
-    UpdateExpedition(dt);
 #endif
     // interpolazione verso l'ultima posizione ricevuta
     float k = 1.0f - expf(-dt * 12.0f);
@@ -400,13 +324,13 @@ void NetDraw3D(Camera3D cam) {
     if (!LocalInGame()) return;
     for (auto& r : sRemotes) {
         if (!Visible(r) || Vector3Distance(r.pos, cam.position) > 260) continue;
-        float hold = r.tool == TOOL_CAMERA ? 1.0f : (r.tool != TOOL_HANDS ? 0.4f : 0.0f);
+        float hold = r.weaponModel != WM_FIST ? 0.7f : 0.0f;
         float action = 0;
         if (r.waveT > 0) {
             hold = 0;
             action = 0.2f + 0.15f * sinf(G.time * 12.0f);
         }
-        DrawHumanoid(r.pos, r.yaw, r.look, r.anim, Clamp01(r.speed / 4.5f), hold, action, 0, r.tool, r.flashT > 0 ? 1.0f : 0.0f, 1.0f, false, r.crouchT);
+        DrawHumanoid(r.pos, r.yaw, r.look, r.anim, Clamp01(r.speed / 4.5f), hold, action, 0, r.weaponModel, r.flashT > 0 ? 1.0f : 0.0f, 1.0f, false, r.crouchT);
     }
     for (auto& r : sRemotes)
         if (Visible(r) && Vector3Distance(r.pos, cam.position) < 50) DrawCylinder(r.pos + V3(0, 0.03f, 0), 0.42f, 0.42f, 0.01f, 10, Color{0, 0, 0, 70});
@@ -482,48 +406,6 @@ static std::string FitNetText(std::string text, float size, float width) {
     return text + "...";
 }
 
-static int ExpeditionDone() {
-    int count = 0;
-    for (const auto& t : sExpedition.targets) count += t.done;
-    return count;
-}
-
-static void ExpeditionDraw(float x, float y, float width, bool details) {
-    if (sStatus == 0 || sExpedition.targets.empty()) return;
-    Color accent = sExpedition.complete ? PIP : CHAT_OTHER;
-    float height = details ? 220 : 184;
-    UIRect(x, y, width, height, Color{7, 20, 13, 190});
-    UIRectLines(x, y, width, height, 1, ColAlpha(accent, 0.7f));
-    UIText("SPEDIZIONE FOTO", x + 10, y + 8, 18, accent);
-    UIText(Fmt("%02d:%02d", sExpedition.seconds / 60, sExpedition.seconds % 60), x + width - 10, y + 8, 18,
-           sExpedition.seconds < 60 ? Col(255, 160, 100) : accent, 2);
-    UIText(Fmt("Squadra %d/3   Le tue foto %d", ExpeditionDone(), sExpedition.own), x + 10, y + 31, 15, PIP);
-    float yy = y + 56;
-    for (const auto& t : sExpedition.targets) {
-        int pi = PhotoIndex(t.key);
-        std::string name = pi >= 0 ? PHOTO_SUBJECTS[pi].name : t.key;
-        UIText(FitNetText((t.done ? "[OK] " : "[  ] ") + name, 16, width - 20), x + 10, yy, 16, t.done ? PIP : CHAT_OTHER);
-        std::string by = t.done ? "Foto di " + t.by : "Da fotografare con la fotocamera";
-        UIText(FitNetText(by, 13, width - 40), x + 28, yy + 18, 13, PIP_DIM);
-        yy += 34;
-    }
-    bool paid = sExpedition.round > 0 && G.flags.count("expedition_reward_round") &&
-                G.flags.at("expedition_reward_round") >= sExpedition.round;
-    std::string footer = paid ? "Premio ricevuto: 120 PE + 60 tappi" :
-                         (sExpedition.complete && sExpedition.own == 0 ? "Scatta una foto per partecipare al premio" : "Premio: 120 PE + 60 tappi a chi contribuisce");
-    UIText(FitNetText(footer, 13, width - 20), x + 10, y + 163, 13, accent);
-    if (details) {
-        std::string leaders = "Contributi: ";
-        for (const auto& c : sExpedition.contributors) {
-            if (leaders.size() > 12) leaders += ", ";
-            leaders += c.name + Fmt(" (%d)", c.count);
-        }
-        if (sExpedition.contributors.empty()) leaders += "la prima foto aspetta te!";
-        UIText(FitNetText(leaders, 14, width - 20), x + 10, y + 186, 14, PIP_DIM);
-        UIText("Nuovi obiettivi ogni 12 minuti, anche da soli.", x + 10, y + 204, 13, PIP_DIM);
-    }
-}
-
 void NetDrawHud() {
     if (!sAvail) return;
     float S = UIS(), Wd = UIW();
@@ -566,11 +448,9 @@ void NetDrawHud() {
     if (PlatformTouch()) UIText(st, Wd / 2, 6, 15, ColAlpha(sc, 0.9f), 1); // in alto a destra ci sono i pulsanti
     else UIText(st, Wd - 16, 10, 15, ColAlpha(sc, 0.9f), 2);
     if (G.state == GS_PLAY && !PlatformTouch()) UIText("T chat   Z saluta   P giocatori", Wd - 16, 30, 13, ColAlpha(PIP_DIM, 0.8f), 2);
-    bool showExpedition = sStatus != 0 && !sExpedition.targets.empty() && (G.state == GS_PLAY || G.state == GS_CHAT);
-    if (showExpedition) ExpeditionDraw(PlatformTouch() ? 16 : Wd - 376, PlatformTouch() ? 34 : 52, 360, false);
     if (sShowList && LocalInGame()) {
         float px = PlatformTouch() ? Wd / 2 - 170 : Wd - 356;
-        float py = PlatformTouch() ? (showExpedition && Wd < 1100 ? 228 : 28) : (showExpedition ? 246 : 52);
+        float py = PlatformTouch() ? 28 : 52;
         int visibleCount = std::min(n, 8);
         float h = 34 + std::max(1, visibleCount) * 24 + (n > visibleCount ? 20 : 0);
         UIRect(px, py, 340, h, Color{0, 0, 0, 150});
@@ -709,17 +589,13 @@ void OnlineDraw() {
     UIText(PlatformTouch() ? "condividi il link" : "copia il link negli appunti", x + 260, 284, 18, PIP_DIM);
     UIText(NetInvite(), Wd / 2, 340, 17, Col(255, 225, 150), 1);
     if (sEditRoom) UIText("Scrivi il nome della stanza e premi INVIO (ESC annulla)", Wd / 2, 380, 16, Col(255, 230, 140), 1);
-    bool showExpedition = sStatus != 0 && !sExpedition.targets.empty();
-    float columnWidth = std::min(420.0f, (Wd - 60) / 2);
-    float playerX = showExpedition ? Wd / 2 + 15 : x;
-    float playerWidth = showExpedition ? columnWidth : 640;
-    if (showExpedition) ExpeditionDraw(Wd / 2 - columnWidth - 15, 404, columnWidth, true);
+    float playerX = x;
+    float playerWidth = 640;
     float y = 410;
     UIText("VIANDANTI COLLEGATI", playerX, y, 22, PIP);
     y += 34;
     if (n == 0) {
         UIText("Nessuno, per ora. Invita gli amici!", playerX, y, 17, PIP_DIM);
-        if (showExpedition) UIText("Puoi già iniziare la spedizione.", playerX, y + 24, 16, PIP_DIM);
     }
     int shown = 0;
     for (auto& r : sRemotes) {
@@ -732,7 +608,7 @@ void OnlineDraw() {
         shown++;
     }
     if (n > shown) UIText(Fmt("... e altri %d viandanti (P durante il gioco)", n - shown), playerX, y, 14, PIP_DIM);
-    UIText("La spedizione unisce le foto nuove della stanza, anche di soggetti già nel tuo catalogo. Basta una tua foto per il premio.", Wd / 2, 636, 15, PIP_DIM, 1);
+    UIText("Chi e' nella stessa stanza si incontra nelle Terre Bruciate. Ognuno conserva il proprio mondo e le proprie missioni.", Wd / 2, 636, 15, PIP_DIM, 1);
     UIText("T chatta, Z saluta, P mostra i giocatori; dalla mappa del Pip-Boy puoi raggiungere un amico.", Wd / 2, 652, 15, PIP_DIM, 1);
 }
 

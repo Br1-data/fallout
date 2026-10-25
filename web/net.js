@@ -13,18 +13,13 @@
 (function () {
     'use strict';
 
-    var APP_ID = 'dustfall-terre-bruciate-v1';
+    var APP_ID = 'dustfall-original-laser-v3';
     var MQTT_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
     var STATE_MS = 100;         // posizione: 10 volte al secondo mentre ci si muove
     var HEARTBEAT_MS = 3000;    // presenza e profilo
     var PEER_TIMEOUT_MS = 12000;
     var DIRECT_FRESH_MS = 5000; // un giocatore è "diretto" se lo abbiamo sentito via WebRTC da poco
     var MAX_NAME = 18, MAX_CHAT = 140, MAX_WHERE = 40;
-    var EXPEDITION_MS = 12 * 60 * 1000;
-    var EXPEDITION_MAX_PLAYERS = 64;
-    var EXPEDITION_POOL = ['vault_door', 'water_tower', 'atom_sign', 'silo', 'radio_tower',
-                           'crater', 'hospital', 'skyscraper', 'base_gate'];
-
     function clean(s, n) {
         return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
     }
@@ -52,10 +47,10 @@
     function sha256(text) { return subtle.digest('SHA-256', enc.encode(text)); }
     function hex(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (x) { return ('0' + x.toString(16)).slice(-2); }).join(''); }
     function roomCrypto(room) {
-        if (!subtle) return Promise.resolve({topic: 'dustfall/v1/' + room, key: null});
-        return Promise.all([sha256('dustfall-argomento|' + room), sha256('dustfall-chiave|' + room)]).then(function (h) {
+        if (!subtle) return Promise.resolve({topic: 'dustfall/laser-v3/' + room, key: null});
+        return Promise.all([sha256('dustfall-laser-v3-argomento|' + room), sha256('dustfall-laser-v3-chiave|' + room)]).then(function (h) {
             return subtle.importKey('raw', new Uint8Array(h[1]).slice(0, 16), 'AES-GCM', false, ['encrypt', 'decrypt']).then(function (key) {
-                return {topic: 'dustfall/v1/' + hex(h[0]).slice(0, 32), key: key};
+                return {topic: 'dustfall/laser-v3/' + hex(h[0]).slice(0, 32), key: key};
             });
         });
     }
@@ -232,7 +227,7 @@
         transports: [],
         rc: null,
         gen: 0,             // cambia a ogni nuova connessione (scarta i messaggi in ritardo)
-        peers: {},          // uid -> {state, stateSeq, stateNew, profile, seen, seenSeqs, chat, rtt, directAt, via}
+        peers: Object.create(null),          // uid -> {state, stateSeq, stateNew, profile, seen, seenSeqs, chat, rtt, directAt, via}
         queue: [],          // righe di eventi per il gioco
         profile: null,
         profileJson: '',
@@ -240,85 +235,6 @@
         lastStateSent: 0,
         lastHeartbeat: 0
     };
-
-    // Spedizioni fotografiche: stessi obiettivi per tutta la stanza, senza un caposquadra
-    // che debba restare connesso. Ogni dodici minuti il segnale radio cambia itinerario.
-    // Le fotografie sono un insieme monotono: i doppioni e l'ordine di arrivo non contano.
-    var expedition = {round: -1, targets: [], players: Object.create(null)};
-
-    function expeditionCurrent() {
-        var round = Math.floor(Date.now() / EXPEDITION_MS);
-        if (expedition.round === round) return expedition;
-        var seed = 2166136261, text = net.roomName + '|' + round;
-        for (var i = 0; i < text.length; i++) seed = Math.imul(seed ^ text.charCodeAt(i), 16777619) >>> 0;
-        var pool = EXPEDITION_POOL.slice();
-        for (var j = pool.length - 1; j > 0; j--) {
-            seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-            var k = seed % (j + 1), swap = pool[j];
-            pool[j] = pool[k]; pool[k] = swap;
-        }
-        expedition = {round: round, targets: pool.slice(0, 3), players: Object.create(null)};
-        return expedition;
-    }
-
-    function expeditionSnapshot() {
-        var e = expeditionCurrent();
-        return {r: e.round, room: net.roomName, c: Object.keys(e.players).sort().map(function (id) {
-            var p = e.players[id];
-            return {u: id, n: p.name, p: Object.keys(p.photos).sort().map(function (key) { return {k: key, t: p.photos[key]}; })};
-        })};
-    }
-
-    function expeditionBroadcast() {
-        if (net.kind !== 'off') send('ex', expeditionSnapshot());
-    }
-
-    function expeditionReceive(data) {
-        var e = expeditionCurrent(), now = Date.now();
-        if (!data || typeof data !== 'object' || data.r !== e.round || data.room !== net.roomName ||
-            !Array.isArray(data.c) || data.c.length > EXPEDITION_MAX_PLAYERS) return;
-        data.c.forEach(function (row) {
-            // Nessun altro browser può attribuire una fotografia al giocatore locale.
-            if (!row || typeof row !== 'object' || typeof row.u !== 'string' ||
-                !/^[a-z0-9]{1,32}$/.test(row.u) || row.u === net.uid ||
-                typeof row.n !== 'string' || row.n.length > 128 || !Array.isArray(row.p) ||
-                !row.p.length || row.p.length > 3) return;
-            var photos = Object.create(null);
-            for (var i = 0; i < row.p.length; i++) {
-                var photo = row.p[i];
-                if (!photo || e.targets.indexOf(photo.k) < 0 || typeof photo.t !== 'number' ||
-                    !Number.isSafeInteger(photo.t) || photo.t < e.round * EXPEDITION_MS ||
-                    photo.t >= (e.round + 1) * EXPEDITION_MS || photo.t > now + 5000) return;
-                photos[photo.k] = Math.min(photos[photo.k] || photo.t, photo.t);
-            }
-            var p = e.players[row.u], name = clean(row.n, MAX_NAME) || 'Viandante';
-            // Un posto resta riservato al giocatore locale anche nelle stanze molto affollate.
-            if (!p && Object.keys(e.players).length >= EXPEDITION_MAX_PLAYERS - (e.players[net.uid] ? 0 : 1)) return;
-            if (!p) p = e.players[row.u] = {name: name, photos: Object.create(null)};
-            else if (name < p.name) p.name = name;
-            Object.keys(photos).forEach(function (key) { p.photos[key] = Math.min(p.photos[key] || photos[key], photos[key]); });
-        });
-    }
-
-    function expeditionView() {
-        var e = expeditionCurrent(), active = net.kind !== 'off', ids = active ? Object.keys(e.players).sort() : [];
-        var targets = e.targets.map(function (key) {
-            var first = null;
-            ids.forEach(function (id) {
-                var p = e.players[id];
-                if (p.photos[key] !== undefined && (!first || p.photos[key] < first.time ||
-                    (p.photos[key] === first.time && id < first.id))) first = {id: id, time: p.photos[key], name: p.name};
-            });
-            return {key: key, done: !!first, by: first ? first.name : ''};
-        });
-        var own = active && e.players[net.uid] ? Object.keys(e.players[net.uid].photos).length : 0;
-        return {
-            round: e.round, seconds: Math.max(0, Math.ceil(((e.round + 1) * EXPEDITION_MS - Date.now()) / 1000)),
-            complete: active && targets.every(function (t) { return t.done; }), own: own, targets: targets,
-            contributors: ids.map(function (id) { return {id: id, name: e.players[id].name, count: Object.keys(e.players[id].photos).length}; })
-                .sort(function (a, b) { return b.count - a.count || a.id.localeCompare(b.id); })
-        };
-    }
 
     function push(line) {
         net.queue.push(line);
@@ -355,7 +271,6 @@
     function heartbeat() {
         net.lastHeartbeat = Date.now();
         if (net.profile) send('hb', net.profile);
-        expeditionBroadcast(); // recupera perdite QoS 0 e aggiorna chi entra a spedizione iniziata
     }
 
     function receive(m, via) {
@@ -383,7 +298,7 @@
             if (seq <= p.stateSeq || !Array.isArray(d) || d.length < 12) return;
             p.stateSeq = seq;
             p.state = [num(d[0], 0, 2) | 0, num(d[1], -2000, 2000), num(d[2], -500, 500), num(d[3], -2000, 2000),
-                       num(d[4], -10, 10), num(d[5], -2, 2), num(d[6], 0, 30), num(d[7], 0, 1) | 0, num(d[8], 0, 4) | 0,
+                       num(d[4], -10, 10), num(d[5], -2, 2), num(d[6], 0, 30), num(d[7], 0, 1) | 0, num(d[8], 0, 13) | 0,
                        num(d[9], 0, 1e6) | 0, num(d[10], 0, 1e6) | 0, num(d[11], 0, 1) | 0];
             p.stateNew = true;
         } else if (m.t === 'hb') {
@@ -402,8 +317,6 @@
             push('C\t' + uid + '\t' + text);
         } else if (m.t === 'em') {
             push('E\t' + uid + '\t' + (num(d, 0, 9) | 0));
-        } else if (m.t === 'ex') {
-            expeditionReceive(d);
         } else if (m.t === 'pi') {
             if (d && typeof d === 'object') send('po', {to: uid, n: num(d.n, 0, 1e9) | 0}, false);
         } else if (m.t === 'po') {
@@ -419,7 +332,6 @@
         net.transports = [];
         for (var id in net.peers) dropPeer(id);
         net.queue.length = 0;
-        expedition = {round: -1, targets: [], players: Object.create(null)};
         net.rc = null;
         if (net.kind === 'off') return;
         var gen = net.gen, room = net.roomName;
@@ -533,18 +445,6 @@
             if (text) send('ch', text);
         },
         sendEmote: function (e) { send('em', e | 0); },
-        expedition: expeditionView,
-        expeditionPhoto: function (key) {
-            var e = expeditionCurrent();
-            if (net.kind === 'off' || e.targets.indexOf(key) < 0) return false;
-            var p = e.players[net.uid];
-            if (!p) p = e.players[net.uid] = {name: 'Viandante', photos: Object.create(null)};
-            if (p.photos[key] !== undefined) return false;
-            p.name = clean(net.profile && net.profile.n, MAX_NAME) || 'Viandante';
-            p.photos[key] = Date.now();
-            expeditionBroadcast();
-            return true;
-        },
         // eventi dall'ultima lettura, una riga ciascuno
         poll: function () {
             for (var id in net.peers) {

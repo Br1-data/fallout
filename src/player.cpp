@@ -1,14 +1,12 @@
-// Giocatore: statistiche, movimento, attrezzi (fotocamera, esche, barattoli), furtività e visuale.
+// Giocatore: statistiche, movimento, armi, oggetti, danni, visuale.
 #include "game.h"
-#include "net.h"
-#include "platform.h"
 
 // ---------------------------------------------------------------------------
 //  Statistiche
 // ---------------------------------------------------------------------------
 int Spec(int st) {
     int v = G.player.special[st];
-    if (G.player.teaTimer > 0 && (st == ST_INT || st == ST_PER)) v += 2;
+    if (G.player.mentatsTimer > 0 && (st == ST_INT || st == ST_PER)) v += 2;
     return std::min(v, 12);
 }
 
@@ -17,15 +15,7 @@ int SkillValue(Skill s) {
     int v = 2 + Spec(SKILL_GOV[s]) * 2 + (Spec(ST_LCK) + 1) / 2;
     if (P.tagged[s]) v += 15;
     v += P.skillPts[s];
-    const ItemDef* wear = P.armor >= 0 ? &ITEMS[P.armor] : nullptr;
-    if (s == SK_SNEAK) {
-        if (P.perks[PK_SOFTSTEP]) v += 15;
-        if (wear) v += wear->sneak;
-    }
-    if (s == SK_REPAIR && P.perks[PK_MECHANIC]) v += 15;
-    if (s == SK_SPEECH && P.perks[PK_SILVERTONGUE]) v += 15;
-    if (s == SK_BARTER && P.perks[PK_MERCHANT]) v += 15;
-    if ((s == SK_SPEECH || s == SK_BARTER) && wear) v += wear->talk;
+    if (s == SK_SNEAK && P.perks[PK_NINJA]) v += 20;
     return Clamp(v, 0, 100);
 }
 
@@ -35,15 +25,15 @@ float MaxHP() {
 }
 float HPCap() { return std::max(1.0f, MaxHP() * (1.0f - Clamp01(G.player.rads / 1000.0f))); }
 float MaxAP() { return 65.0f + G.player.special[ST_AGI] * 3.0f + (G.player.perks[PK_ACTIONBOY] ? 25.0f : 0.0f); }
-float CarryMax() {
-    const Player& P = G.player;
-    float c = 150.0f + P.special[ST_STR] * 10.0f + (P.perks[PK_STRONGBACK] ? 50.0f : 0.0f);
-    if (P.armor >= 0) c += ITEMS[P.armor].carry;
-    return c;
+float CarryMax() { return 150.0f + G.player.special[ST_STR] * 10.0f + (G.player.perks[PK_STRONGBACK] ? 50.0f : 0.0f); }
+float PlayerDR() {
+    float dr = G.player.armor >= 0 ? ITEMS[G.player.armor].dr : 0;
+    if (G.player.perks[PK_TOUGHNESS]) dr += 10;
+    return dr;
 }
 float PlayerRadRes() {
     const Player& P = G.player;
-    float r = P.special[ST_END] * 0.02f + SkillValue(SK_SURVIVAL) / 400.0f;
+    float r = P.special[ST_END] * 0.02f;
     if (P.armor >= 0) r += ITEMS[P.armor].radRes;
     if (P.perks[PK_RADRES]) r += 0.25f;
     if (P.radXTimer > 0) r += 0.5f;
@@ -54,15 +44,9 @@ int ArmorOutfit() { return G.player.armor >= 0 ? ITEMS[G.player.armor].look : OF
 
 float PlayerSpeedMul() {
     float m = 1.0f;
-    if (G.player.perks[PK_EXPLORER]) m *= 1.1f;
+    if (G.player.armor == I_POWER) m *= 0.9f;
     if (G.player.inv.Weight() > CarryMax()) m *= 0.5f;
     return m;
-}
-
-bool HasPhoto(const std::string& key) {
-    for (auto& p : G.player.photos)
-        if (p == key) return true;
-    return false;
 }
 
 void GiveXP(int amount, const char* reason) {
@@ -78,21 +62,6 @@ void GiveXP(int amount, const char* reason) {
     }
 }
 
-int ToolItem(int tool) {
-    switch (tool) {
-        case TOOL_CAMERA: return I_CAMERA;
-        case TOOL_BAIT: return I_BAIT;
-        case TOOL_NOISE: return I_NOISE;
-        case TOOL_BLASTER: return I_BLASTER;
-        default: return -1;
-    }
-}
-
-const char* ToolName(int tool) {
-    int it = ToolItem(tool);
-    return it >= 0 ? ITEMS[it].name : "Mani libere";
-}
-
 void GiveItem(int id, int count, bool notify) {
     G.player.inv.Add(id, count);
     if (notify) {
@@ -106,37 +75,222 @@ void GiveItem(int id, int count, bool notify) {
 void TakeItem(int id, int count) {
     G.player.inv.Remove(id, count);
     if (id == G.player.armor && G.player.inv.Count(id) == 0) G.player.armor = -1;
-    int ti = ToolItem(G.player.tool);
-    if (ti >= 0 && G.player.inv.Count(ti) == 0) G.player.tool = TOOL_HANDS;
+    if (id == G.player.weapon && G.player.inv.Count(id) == 0) { G.player.weapon = -1; G.player.mag = 0; }
 }
 
 Vector3 PlayerEye() { return G.player.pos + V3(0, G.player.eyeH, 0); }
+Vector3 PlayerChest() { return G.player.pos + V3(0, G.player.eyeH - 0.45f, 0); }
 Vector3 PlayerForward() {
     const Player& P = G.player;
     return V3(cosf(P.pitch) * sinf(P.yaw), sinf(P.pitch), cosf(P.pitch) * cosf(P.yaw));
 }
 
+int CurrentWeaponDefIndex() { return G.player.weapon >= 0 ? ITEMS[G.player.weapon].weapon : WEAPON_FIST; }
+const WeaponDef& CurrentWeapon() { return WEAPONS[CurrentWeaponDefIndex()]; }
+
 bool HostilesNear(float range) {
     for (auto& e : G.ents)
-        if (e.hostile && e.aware && !e.off && e.zone == G.player.zone && Vector3Distance(e.pos, G.player.pos) < range) return true;
+        if (!e.stunned && e.hostile && e.aware && e.zone == G.player.zone && Vector3Distance(e.pos, G.player.pos) < range) return true;
     return false;
 }
 
+Vector3 MuzzleWorld() {
+    Vector3 f = PlayerForward();
+    Vector3 r = Vector3Normalize(Vector3CrossProduct(f, V3(0, 1, 0)));
+    Vector3 u = Vector3CrossProduct(r, f);
+    float aim = G.player.aimT;
+    if (G.player.thirdPerson) return G.player.pos + V3(0, 1.45f, 0) + YawDir(G.player.yaw) * 0.7f + r * 0.15f;
+    return G.cam.position + r * LerpF(0.16f, 0.0f, aim) - u * LerpF(0.12f, 0.07f, aim) + f * 0.75f;
+}
+
 // ---------------------------------------------------------------------------
-//  Attrezzi
+//  Armi
 // ---------------------------------------------------------------------------
-void EquipTool(int tool) {
+float WeaponDamage(const WeaponDef& w) {
+    const Player& P = G.player;
+    float skill = SkillValue(w.skill);
+    float d = w.damage * (0.5f + skill / 200.0f);
+    bool oneHandGun = w.model == WM_PISTOL || w.model == WM_LASERPISTOL;
+    if (P.perks[PK_GUNSLINGER] && oneHandGun) d *= 1.25f;
+    if (P.perks[PK_COMMANDO] && w.twoHanded && !w.melee) d *= 1.25f;
+    if (P.perks[PK_LASER] && w.energy) d *= 1.25f;
+    if (w.melee) {
+        d *= 1.0f + Spec(ST_STR) * 0.05f;
+        if (P.perks[PK_IRONFIST]) d *= 1.5f;
+    }
+    if (P.perks[PK_BLOODYMESS]) d *= 1.05f;
+    return d;
+}
+
+static float CritChance() {
+    return Spec(ST_LCK) * 0.01f + (G.player.perks[PK_FINESSE] ? 0.05f : 0.0f);
+}
+
+void FireRay(Vector3 o, Vector3 dir, const WeaponDef& w, float dmg, Vector3 muzzle, int vatsTarget, int vatsPart) {
+    int zone = G.player.zone;
+    RayHit wh, eh;
+    float maxT = w.range;
+    bool hw = RaycastWorld(zone, o, dir, maxT, wh);
+    bool he = RaycastEntities(zone, o, dir, hw ? wh.t : maxT, eh);
+    Vector3 end = he ? eh.point : (hw ? wh.point : o + dir * maxT);
+    if (he) {
+        Entity& e = G.ents[eh.entity];
+        bool crit = gRng.chance(CritChance());
+        int part = eh.part;
+        if (vatsTarget == eh.entity && vatsPart >= 0) part = vatsPart;
+        float d = dmg;
+        if (!e.aware && e.hostile) {
+            d *= 2.0f;
+            Notify("Attacco furtivo critico!", Col(255, 230, 120));
+        } else if (crit) {
+            d *= 2.0f;
+            Notify("Colpo critico!", Col(255, 230, 120));
+        }
+        ApplyStunDamage(e, d, part, dir, true, crit);
+        PlaySfx3D(eh.metal ? SFX_METALHIT : SFX_HIT, eh.point, 0.7f);
+    } else if (hw) {
+        SpawnImpact(zone, wh.point, wh.normal, wh.metal);
+        if (gRng.chance(0.3f)) PlaySfx3D(wh.metal ? SFX_METALHIT : SFX_IMPACT, wh.point, 0.5f);
+    }
+    if (w.energy) {
+        SpawnTracer(zone, muzzle, end, w.beam, w.model == WM_PLASMA ? 0.07f : 0.03f, w.model == WM_PLASMA ? 0.25f : 0.15f);
+        if (he || hw) SpawnDynLight(zone, end, w.beam, 4, 0.12f);
+    } else if (gRng.chance(0.5f)) SpawnTracer(zone, muzzle, end, Col(255, 230, 170), 0.01f, 0.05f);
+}
+
+static Vector3 Spread(Vector3 f, float deg) {
+    if (deg <= 0) return f;
+    Vector3 r = Vector3Normalize(Vector3CrossProduct(f, V3(0, 1, 0)));
+    Vector3 u = Vector3CrossProduct(r, f);
+    float a = gRng.range(0, 2 * PI), m = sqrtf(gRng.f()) * tanf(deg * DEG2RAD);
+    return Vector3Normalize(f + r * (cosf(a) * m) + u * (sinf(a) * m));
+}
+
+void PlayerFire() {
     Player& P = G.player;
-    int it = ToolItem(tool);
-    if (it >= 0 && P.inv.Count(it) <= 0) {
-        Notify(Fmt("Non hai: %s", ITEMS[it].name), Col(255, 200, 140));
+    const WeaponDef& w = CurrentWeapon();
+    if (w.melee) {
+        P.swingT = 0.001f;
+        P.swingDone = false;
+        P.fireCd = w.fireDelay;
+        PlaySfx(w.sfx, 0.7f, gRng.range(0.9f, 1.1f));
+        AlertNearby(P.zone, P.pos, 8);
         return;
     }
-    if (P.tool == tool) return;
-    P.tool = tool;
-    P.equipT = 0.35f;
-    P.throwT = 0;
-    PlaySfx(SFX_UI_MOVE, 0.6f, 0.8f);
+    if (P.mag <= 0) {
+        PlaySfx(SFX_EMPTY);
+        P.fireCd = 0.3f;
+        if (P.inv.Count(w.ammo) > 0) PlayerReload();
+        else Notify("Munizioni esaurite!", Col(255, 140, 100));
+        return;
+    }
+    P.mag--;
+    P.shots++;
+    P.fireCd = w.fireDelay;
+    P.lastCombat = 0;
+    float skill = SkillValue(w.skill);
+    float spread = w.spread * (1.6f - skill / 100.0f);
+    if (P.aimT > 0.5f) spread *= 0.4f;
+    if (Vector3Length(V3(P.vel.x, 0, P.vel.z)) > 1) spread *= 1.4f;
+    if (P.crouch) spread *= 0.8f;
+    if ((P.perks[PK_GUNSLINGER] && (w.model == WM_PISTOL || w.model == WM_LASERPISTOL)) || (P.perks[PK_COMMANDO] && w.twoHanded)) spread *= 0.75f;
+    if (w.pellets > 1) spread = std::max(spread, w.spread * 0.8f);
+    Vector3 o = G.cam.position;
+    Vector3 f = PlayerForward();
+    if (P.thirdPerson) f = Vector3Normalize(G.cam.target - G.cam.position);
+    Vector3 m = MuzzleWorld();
+    float dmg = WeaponDamage(w);
+    for (int i = 0; i < w.pellets; i++) FireRay(o, Spread(f, spread), w, dmg, m);
+    P.recoil += w.recoil;
+    P.pitch += w.recoil * DEG2RAD * 0.35f;
+    P.yaw += gRng.range(-1, 1) * w.recoil * DEG2RAD * 0.15f;
+    P.flash = 0.06f;
+    SpawnDynLight(P.zone, m, w.energy ? w.beam : Col(255, 200, 120), 8, 0.06f);
+    PlaySfx(w.sfx, 1.0f, gRng.range(0.95f, 1.05f));
+    AlertNearby(P.zone, P.pos, w.energy ? 30 : 55);
+    if (P.mag <= 0 && P.inv.Count(w.ammo) > 0) P.fireCd = std::max(P.fireCd, 0.25f);
+}
+
+void PlayerMeleeHit() {
+    Player& P = G.player;
+    const WeaponDef& w = CurrentWeapon();
+    Vector3 eye = PlayerEye(), f = PlayerForward();
+    int best = -1;
+    float bd = 1e9f;
+    for (int i = 0; i < (int)G.ents.size(); i++) {
+        Entity& e = G.ents[i];
+        if (e.stunned || e.zone != P.zone) continue;
+        Vector3 c = e.pos + V3(0, std::min(1.0f, 0.9f * e.scale), 0);
+        Vector3 to = c - eye;
+        float d = Vector3Length(to);
+        if (d > w.range + EntityRadius(e) + 0.3f) continue;
+        float ang = acosf(Clamp(Vector3DotProduct(to / d, f), -1.f, 1.f));
+        if (ang > 0.75f && d > 1.2f) continue;
+        if (d < bd) { bd = d; best = i; }
+    }
+    if (best >= 0) {
+        Entity& e = G.ents[best];
+        float dmg = WeaponDamage(w);
+        bool crit = gRng.chance(CritChance());
+        if (!e.aware && e.hostile) { dmg *= 2; Notify("Attacco furtivo critico!", Col(255, 230, 120)); }
+        else if (crit) { dmg *= 2; Notify("Colpo critico!", Col(255, 230, 120)); }
+        ApplyStunDamage(e, dmg, 0, f, true, crit);
+        PlaySfx3D(e.kind == EK_ROBOT || e.kind == EK_TURRET ? SFX_METALHIT : SFX_PUNCH, e.pos, 1.0f);
+        P.lastCombat = 0;
+    } else {
+        RayHit h;
+        if (RaycastWorld(P.zone, eye, f, w.range, h)) {
+            SpawnImpact(P.zone, h.point, h.normal, h.metal);
+            PlaySfx3D(h.metal ? SFX_METALHIT : SFX_IMPACT, h.point, 0.6f);
+        }
+    }
+}
+
+void PlayerReload() {
+    Player& P = G.player;
+    const WeaponDef& w = CurrentWeapon();
+    if (w.melee || w.ammo < 0 || w.mag <= 0) return;
+    if (P.mag >= w.mag || P.reloadT > 0) return;
+    if (P.inv.Count(w.ammo) <= 0) {
+        Notify("Nessuna cella energetica di riserva.", Col(255, 140, 100));
+        return;
+    }
+    P.reloadT = w.reload * (P.perks[PK_FASTRELOAD] ? 0.6f : 1.0f);
+    PlaySfx(SFX_RELOAD);
+}
+
+static void FinishReload() {
+    Player& P = G.player;
+    const WeaponDef& w = CurrentWeapon();
+    int n = std::min(w.mag - P.mag, P.inv.Count(w.ammo));
+    if (n > 0) {
+        P.inv.Remove(w.ammo, n);
+        P.mag += n;
+    }
+}
+
+void EquipWeapon(int item) {
+    Player& P = G.player;
+    if (item >= 0 && ITEMS[item].weapon >= 0 && WEAPONS[ITEMS[item].weapon].model == WM_GRENADE) {
+        Notify("Gli impulsi EMP si lanciano con il tasto G.");
+        return;
+    }
+    // scarica l'arma attuale
+    const WeaponDef& cur = CurrentWeapon();
+    if (P.weapon >= 0 && cur.ammo >= 0 && P.mag > 0) P.inv.Add(cur.ammo, P.mag);
+    P.mag = 0;
+    P.reloadT = 0;
+    if (item == P.weapon) item = -1;
+    P.weapon = item;
+    const WeaponDef& w = CurrentWeapon();
+    if (item >= 0 && w.ammo >= 0 && w.mag > 0) {
+        int n = std::min(w.mag, P.inv.Count(w.ammo));
+        P.inv.Remove(w.ammo, n);
+        P.mag = n;
+    }
+    P.equipT = 0.45f;
+    P.swingT = 0;
+    PlaySfx(SFX_RELOAD, 0.5f, 1.3f);
 }
 
 void EquipArmor(int item) {
@@ -145,192 +299,22 @@ void EquipArmor(int item) {
     PlaySfx(SFX_PICKUP, 0.6f, 0.8f);
 }
 
-static float ThrowPower() {
-    return 11.0f + SkillValue(SK_ATHLETICS) * 0.06f + (G.player.perks[PK_THROWER] ? 4.0f : 0.0f);
-}
-
-static void ThrowTool(int tool) {
-    Player& P = G.player;
-    int it = ToolItem(tool);
-    if (it < 0 || P.inv.Count(it) <= 0) {
-        Notify(it >= 0 ? Fmt("Non hai: %s", ITEMS[it].name) : std::string("Niente da lanciare."), Col(255, 200, 140));
-        return;
-    }
-    TakeItem(it, 1);
-    Vector3 f = PlayerForward();
-    if (P.thirdPerson) f = Vector3Normalize(G.cam.target - G.cam.position);
-    ThrowObject(P.zone, PlayerEye() + f * 0.6f, f * ThrowPower() + V3(0, 3.0f, 0), tool);
-    PlaySfx(SFX_SWING, 0.7f, 1.1f);
-    P.throwT = 0.001f;
-    P.useCd = 0.6f;
-}
-
-static float AngleToPoint(Vector3 eye, Vector3 f, Vector3 p, float* dist) {
-    Vector3 to = p - eye;
-    float d = Vector3Length(to);
-    if (dist) *dist = d;
-    if (d < 0.01f) return 0;
-    return acosf(Clamp(Vector3DotProduct(to / d, f), -1.f, 1.f));
-}
-
-void TakePhoto() {
-    Player& P = G.player;
-    Vector3 eye = G.cam.position;
-    Vector3 f = Vector3Normalize(G.cam.target - G.cam.position);
-    float zoomed = P.aimT > 0.5f;
-    float maxAng = (zoomed ? 5.0f : 9.0f) * DEG2RAD;
-    float maxDist = zoomed ? 130.0f : 70.0f;
-    P.flash = 0.25f;
-    P.useCd = 0.8f;
-    PlaySfx(SFX_SHUTTER);
-    SpawnDynLight(P.zone, eye + f * 0.5f, Col(255, 255, 240), 10, 0.08f);
-    std::string bestKey, bestName;
-    float bestAng = maxAng;
-    // creature e personaggi
-    for (auto& e : G.ents) {
-        if (e.zone != P.zone || e.photoKey.empty()) continue;
-        float d;
-        Vector3 c = EntityCenter(e);
-        float a = AngleToPoint(eye, f, c, &d);
-        float tol = maxAng + atanf(EntityRadius(e) / std::max(d, 1.0f));
-        if (d > maxDist || a > tol || a - tol + maxAng > bestAng) continue;
-        if (!LineOfSight(P.zone, eye, c)) continue;
-        bestAng = a - tol + maxAng;
-        bestKey = e.photoKey;
-        int pi = PhotoIndex(e.photoKey);
-        bestName = pi >= 0 ? PHOTO_SUBJECTS[pi].name : e.name;
-        // il lampo può svegliare o insospettire chi è vicino
-        if (d < 14 && e.hostile && !e.off) {
-            if (e.asleep && d < 8) e.alert += 0.4f;
-            else if (!e.asleep) e.alert += 0.35f;
-        }
-    }
-    // luoghi notevoli
-    for (auto& s : PHOTO_SUBJECTS) {
-        if (!s.landmark || s.zone != P.zone) continue;
-        float d;
-        float a = AngleToPoint(eye, f, s.pos, &d);
-        float tol = maxAng + 0.06f;
-        if (d > 170 || a > tol || a - tol + maxAng > bestAng) continue;
-        // il punto di riferimento può stare dentro l'edificio: basta vederne la superficie
-        Vector3 seen = s.pos + Vector3Normalize(eye - s.pos) * std::min(3.5f, d * 0.5f);
-        if (!LineOfSight(P.zone, eye, seen)) continue;
-        bestAng = a - tol + maxAng;
-        bestKey = s.key;
-        bestName = s.name;
-    }
-    if (bestKey.empty()) {
-        Notify("Nessun soggetto interessante nell'inquadratura.", Col(200, 220, 200));
-        return;
-    }
-    bool expeditionPhoto = NetPhoto(bestKey);
-    if (HasPhoto(bestKey)) {
-        if (!expeditionPhoto) Notify(Fmt("Hai già una foto di: %s", bestName.c_str()), Col(200, 220, 200));
-        return;
-    }
-    P.photos.push_back(bestKey);
-    int pi = PhotoIndex(bestKey);
-    int xp = pi >= 0 ? PHOTO_SUBJECTS[pi].xp : 20;
-    if (P.perks[PK_PHOTOGRAPHER]) xp = xp * 3 / 2;
-    BigNotify("NUOVA FOTO", bestName);
-    GiveXP(xp, "Fotografia");
-    PlaySfx(SFX_DISCOVER, 0.7f);
-    QuestsOnPhoto(bestKey);
-}
-
-bool CanSearchStunnedEntity(const Entity& e) {
-    if (e.stunT <= 0 || e.off) return false;
-    const char* flag = e.tag == "boss" ? "original_boss_searched" : (e.tag == "beast" ? "original_beast_claw_taken" : nullptr);
-    if (!flag) return false;
-    auto found = G.flags.find(flag);
-    return found == G.flags.end() || found->second == 0;
-}
-
-bool SearchStunnedEntity(int index) {
-    if (index < 0 || index >= (int)G.ents.size()) return false;
-    Entity& e = G.ents[index];
-    if (!CanSearchStunnedEntity(e) || e.zone != G.player.zone ||
-        Vector3Distance(G.player.pos, e.pos) > 4.0f + EntityRadius(e) ||
-        !LineOfSight(e.zone, PlayerEye(), EntityCenter(e))) return false;
-    if (e.tag == "boss") {
-        G.flags["original_boss_searched"] = 1;
-        if (Interactable* safe = FindInterByTag("boss_safe")) safe->inv.Remove(I_KEYCARD, safe->inv.Count(I_KEYCARD));
-        if (!G.player.inv.Count(I_KEYCARD)) GiveItem(I_KEYCARD);
-        if (!G.player.inv.Count(I_SAFEKEY)) GiveItem(I_SAFEKEY);
-        GiveItem(I_CAPS, 150);
-        Notify("Hai recuperato la tessera di Delta-9 da Teschio, ancora vivo.");
-    } else {
-        G.flags["original_beast_claw_taken"] = 1;
-        GiveItem(I_CLAW);
-        Notify("Hai raccolto un artiglio spezzato: portalo a Jack Falco.");
-    }
-    PlaySfx(SFX_PICKUP);
-    return true;
-}
-
-void FireBlaster() {
-    Player& P = G.player;
-    if (P.inv.Count(I_BLASTER) == 0 || P.useCd > 0) return;
-    if (P.ap < 8) { Notify("Blaster scarico: attendi la ricarica dei PA."); return; }
-    P.ap -= 8;
-    P.useCd = 0.45f;
-    P.flash = 0.16f;
-    Vector3 origin = G.cam.position;
-    Vector3 direction = Vector3Normalize(G.cam.target - origin);
-    float distance = 95;
-    RayHit worldHit{}, entityHit{};
-    if (RaycastWorld(P.zone, origin, direction, distance, worldHit)) distance = worldHit.t;
-    bool hitEntity = RaycastEntities(P.zone, origin, direction, distance, entityHit);
-    if (hitEntity) distance = entityHit.t;
-    Vector3 impact = origin + direction * distance;
-    if (hitEntity) {
-        Entity& e = G.ents[entityHit.entity];
-        if (!e.off) {
-            e.stunT = 6;
-            e.vel = V3(0, 0, 0);
-            e.moveAmt = 0;
-            e.aware = false;
-            e.alert = 0;
-            if (!e.companion) e.ai = AI_RETURN;
-            QuestsOnStun(e);
-            bool machine = e.kind == EK_ROBOT || e.kind == EK_CAMERA;
-            Notify(e.name + (machine ? ": sovraccarico per 6 secondi!" : ": stordito per 6 secondi!"), Col(110, 235, 255));
-        }
-    }
-    Vector3 right = Vector3Normalize(Vector3CrossProduct(direction, V3(0, 1, 0)));
-    SpawnLaser(P.zone, origin + right * 0.2f - V3(0, 0.15f, 0) + direction * 0.5f, impact);
-    PlaySfx(SFX_LASER, 0.7f);
-}
-
-static void UseTool() {
-    Player& P = G.player;
-    switch (P.tool) {
-        case TOOL_CAMERA: TakePhoto(); break;
-        case TOOL_BAIT: ThrowTool(TOOL_BAIT); break;
-        case TOOL_NOISE: ThrowTool(TOOL_NOISE); break;
-        case TOOL_BLASTER: FireBlaster(); break;
-        default: break;
-    }
-}
-
 void UseItem(int item) {
     Player& P = G.player;
     const ItemDef& d = ITEMS[item];
-    if (d.type == IT_TOOL) { EquipTool(d.tool); return; }
+    if (d.type == IT_WEAPON) { EquipWeapon(item); return; }
     if (d.type == IT_ARMOR) { EquipArmor(item); return; }
     if (d.type != IT_AID) {
-        if (item == I_SCOUTNOTE) BigNotify("Biglietto dell'esploratore", "Il deposito è sul bordo orientale del Cratere Verde.");
-        else if (item == I_MAINTCODE) BigNotify("Codice di manutenzione", "PROMETEO-0451: spegne la Sentinella Mk.V dal terminale del laboratorio.");
+        if (item == I_SCOUTNOTE) BigNotify("Diario dell'esploratore", "Il deposito è sul bordo orientale del Cratere Verde.");
         return;
     }
     if (P.inv.Count(item) <= 0) return;
     P.inv.Remove(item, 1);
     float med = 0.6f + SkillValue(SK_MEDICINE) / 100.0f * 0.8f;
     if (P.perks[PK_MEDIC]) med *= 1.5f;
-    float surv = 1.0f + SkillValue(SK_SURVIVAL) / 100.0f;
-    if (item == I_MEDKIT) {
+    if (item == I_STIMPAK) {
         P.healOverTime += d.heal * med;
-        P.medkitsUsed++;
+        P.stimpaksUsed++;
         PlaySfx(SFX_STIM);
     } else if (item == I_RADAWAY) {
         P.rads = std::max(0.0f, P.rads + d.rads * med);
@@ -340,23 +324,17 @@ void UseItem(int item) {
         P.radXTimer = 180;
         PlaySfx(SFX_EAT, 0.6f, 1.4f);
         Notify("Resistenza alle radiazioni aumentata.");
-    } else if (item == I_STEALTHBOY) {
-        P.stealthT = d.stealth * (P.perks[PK_SHADOW] ? 2.0f : 1.0f);
-        PlaySfx(SFX_STEALTH);
-        Notify("Mantello ottico attivo: sei quasi invisibile!", Col(150, 220, 255));
-        for (auto& e : G.ents)
-            if (e.zone == P.zone && e.ai == AI_CHASE) { e.aware = false; e.alert = 0.3f; e.ai = AI_RETURN; }
-    } else if (item == I_COFFEE) {
-        P.coffeeTimer = 60;
+    } else if (item == I_JET) {
+        P.jetTimer = 12;
         P.ap = std::min(MaxAP(), P.ap + d.ap);
-        PlaySfx(SFX_EAT, 0.7f, 1.2f);
-        Notify("Caffè d'anteguerra: energia a mille!");
-    } else if (item == I_HERBTEA) {
-        P.teaTimer = 120;
+        PlaySfx(SFX_STIM, 0.8f, 1.4f);
+        Notify("Scheggia: il tempo rallenta...", Col(255, 200, 120));
+    } else if (item == I_MENTATS) {
+        P.mentatsTimer = 120;
         PlaySfx(SFX_EAT, 0.6f, 1.5f);
-        Notify("Tisana del deserto: +2 Intelligenza e Percezione.");
+        Notify("Mentalix: +2 Intelligenza e Percezione.");
     } else {
-        P.healOverTime += d.heal * surv;
+        P.healOverTime += d.heal;
         float r = d.rads * (P.perks[PK_LEADBELLY] ? 0.5f : 1.0f);
         P.rads += r * (1.0f - PlayerRadRes() * 0.5f);
         if (d.ap > 0) P.ap = std::min(MaxAP(), P.ap + d.ap);
@@ -365,98 +343,36 @@ void UseItem(int item) {
 }
 
 // ---------------------------------------------------------------------------
-//  Pericoli: radiazioni, cadute, essere scacciati
+//  Resistenza e neutralizzazioni
 // ---------------------------------------------------------------------------
-void PlayerHurt(float dmg, bool radiation) {
+void PlayerTakeDamage(float dmg, Vector3 from, bool radiation) {
     Player& P = G.player;
-    if (G.state == GS_FAINT || G.state == GS_ENDING) return;
-    P.hp -= dmg;
-    P.hurtFlash = std::min(1.0f, P.hurtFlash + dmg / 22.0f + 0.15f);
-    if (!radiation) PlaySfx(SFX_HURT, 0.7f, gRng.range(0.9f, 1.1f));
+    if (G.state == GS_INCAPACITATED || G.state == GS_ENDING) return;
+    if (G.state == GS_VATS && G.vatsExec) dmg *= 0.25f;
+    float final_ = radiation ? dmg : dmg * 40.0f / (40.0f + PlayerDR());
+    P.hp -= final_;
+    P.hurtFlash = std::min(1.0f, P.hurtFlash + final_ / 22.0f + 0.15f);
+    P.hurtDir = AngleWrap(AngleTo(P.pos, from) - P.yaw);
+    P.lastCombat = 0;
+    static float hurtCd = 0;
+    if (G.time - hurtCd > 0.35f) {
+        PlaySfx(SFX_HURT, 0.8f, gRng.range(0.9f, 1.1f));
+        hurtCd = G.time;
+    }
     if (P.hp <= 0) {
         P.hp = 0;
-        PlayerFaint();
+        PlaySfx(SFX_SPARK);
+        SetGameState(GS_INCAPACITATED);
     }
 }
 
-void PlayerFaint() {
-    PlaySfx(SFX_FAINT);
-    SetGameState(GS_FAINT);
-}
-
-static const char* CatchMessage(const Entity& e) {
-    switch (e.kind) {
-        case EK_ROACH: return "I radscarafaggi ti sciamano intorno: scappi a gambe levate!";
-        case EK_MOLERAT: return "Il ratto talpa difende la sua tana: meglio girare al largo!";
-        case EK_DOG: return "I cani abbaiano e ti rincorrono finché non ti allontani!";
-        case EK_GHOUL: return "Un ghoul ti afferra la manica: ti divincoli e scappi!";
-        case EK_MUTANT: return "Il mutante ti prende per il colletto e ti accompagna fuori brontolando.";
-        case EK_ROBOT: case EK_CAMERA: return "SENTINELLA: \"Intruso individuato. Scorta all'uscita in corso.\"";
-        case EK_DEATHCLAW: return "Lo Squarciatore si sveglia con un ruggito: corri via più veloce che puoi!";
-        default:
-            if (e.fac == FAC_RAIDER) return "I Teschi ti accompagnano fuori dal covo: \"E non tornare senza permesso!\"";
-            return "Ti hanno scoperto e cacciato via!";
-    }
-}
-
-void CatchPlayer(Entity& e) {
+void PlayerIncapacitatedEntity(Entity& e) {
     Player& P = G.player;
-    if (P.catchImmune > 0 || G.fade != 0) return;
-    P.timesCaught++;
-    P.catchImmune = 6;
-    PlaySfx(SFX_CAUGHT);
-    BigNotify("SCOPERTO!", CatchMessage(e));
-    // punto sicuro dove ritrovarsi
-    int zone = P.zone;
-    Vector3 dest = P.pos;
-    float yaw = P.yaw;
-    if (zone == ZONE_BASE) {
-        zone = ZONE_WASTE;
-        dest = V3(186, 0, 222);
-        yaw = PI / 2;
-    } else if (W.zones[zone].outdoor) {
-        // all'ingresso del luogo più vicino, se è fuori dal territorio di chi ti ha scoperto...
-        float minDist = std::min(e.territory, 30.0f) + 8;
-        int best = -1;
-        float bd = 1e9f;
-        for (int i = 0; i < (int)W.locations.size(); i++) {
-            float d = DistXZ(W.locations[i].pos, e.home);
-            if (d < W.locations[i].radius + 60 && d < bd && DistXZ(W.locations[i].travelPos, e.home) > minDist) { bd = d; best = i; }
-        }
-        if (best >= 0) {
-            dest = W.locations[best].travelPos;
-            yaw = AngleTo(dest, W.locations[best].pos);
-        } else {
-            // ...altrimenti appena oltre il confine del territorio, dalla parte da cui sei arrivato
-            Vector3 away = V3(P.pos.x - e.home.x, 0, P.pos.z - e.home.z);
-            if (Vector3Length(away) < 0.1f) away = V3(1, 0, 0);
-            float base = atan2f(away.x, away.z);
-            for (int k = 0; k < 12; k++) {
-                float a = base + (k / 2 + 1) * 0.35f * ((k & 1) ? 1.f : -1.f) * (k > 0 ? 1.f : 0.f);
-                Vector3 dir = V3(sinf(a), 0, cosf(a));
-                Vector3 p = e.home + dir * (e.territory + 18);
-                p.y = TerrainHeight(p.x, p.z);
-                dest = p;
-                yaw = atan2f(dir.x, dir.z);
-                if (!CircleBlocked(zone, V3(p.x, p.y + 0.1f, p.z), 0.4f, 1.8f, 0.6f)) break;
-            }
-        }
-    }
-    if (e.fac == FAC_RAIDER && P.inv.Count(I_CAPS) >= 10) {
-        TakeItem(I_CAPS, 10);
-        Notify("Ti hanno \"multato\" di 10 tappi.", Col(255, 210, 150));
-    }
-    G.pendingZone = zone;
-    G.pendingPos = dest;
-    G.pendingYaw = yaw;
-    G.fade = 0.001f;
-    G.timeOfDay += 0.5f;
-    for (auto& o : G.ents)
-        if (o.zone == e.zone && (o.ai == AI_CHASE || o.ai == AI_SEARCH)) {
-            o.aware = false;
-            o.alert = 0;
-            o.ai = AI_RETURN;
-        }
+    P.incapacitations++;
+    GiveXP(e.xp, ("Neutralizzato: " + e.name).c_str());
+    if (e.fac == FAC_TOWN || e.fac == FAC_VAULT) P.karma -= 50;
+    else if (e.fac == FAC_RAIDER) P.karma += 5;
+    QuestsOnIncapacitate(e);
 }
 
 // ---------------------------------------------------------------------------
@@ -471,12 +387,13 @@ static void FindInteraction() {
     float best = 0.38f;
     for (int i = 0; i < (int)G.ents.size(); i++) {
         Entity& e = G.ents[i];
-        bool search = CanSearchStunnedEntity(e);
-        if (e.zone != P.zone || (!search && (e.hostile || e.stunT > 0 || e.dlg.empty()))) continue;
-        Vector3 c = EntityCenter(e);
+        if (e.zone != P.zone) continue;
+        if (!e.stunned && (e.hostile || e.dlg.empty())) continue;
+        if (e.stunned && e.inv.Empty()) continue;
+        Vector3 c = e.pos + V3(0, e.stunned ? 0.3f : 1.1f * e.scale, 0);
         Vector3 to = c - eye;
         float d = Vector3Length(to);
-        if (d > 4.0f + EntityRadius(e)) continue;
+        if (d > (e.stunned ? 2.6f : 4.0f) + EntityRadius(e)) continue;
         float ang = acosf(Clamp(Vector3DotProduct(to / d, f), -1.f, 1.f));
         if (d < 1.2f) ang *= 0.5f;
         if (ang < best) { best = ang; G.lookEnt = i; }
@@ -484,36 +401,50 @@ static void FindInteraction() {
     for (int i = 0; i < (int)G.inters.size(); i++) {
         Interactable& it = G.inters[i];
         if (it.zone != P.zone || (it.type == INT_ITEM && it.used)) continue;
-        if (it.type == INT_REPAIR && it.used) continue;
         Vector3 c = it.pos + (it.type == INT_CONTAINER ? V3(0, it.size.y * 0.5f, 0) : V3(0, 0, 0));
         Vector3 to = c - eye;
         float d = Vector3Length(to);
         float range = std::max(2.6f, std::max(it.size.x, it.size.y) * 0.65f);
         if (d > range) continue;
         float ang = acosf(Clamp(Vector3DotProduct(to / d, f), -1.f, 1.f));
-        float tol = (it.type == INT_TRANSITION || it.type == INT_VAULTDOOR || it.type == INT_GATE || it.type == INT_REACTOR || it.type == INT_LADDER) ? 0.75f : 0.45f;
+        float tol = (it.type == INT_TRANSITION || it.type == INT_VAULTDOOR || it.type == INT_GATE || it.type == INT_REACTOR) ? 0.75f : 0.45f;
         if (ang < tol && ang * 0.8f < best) { best = ang * 0.8f; G.lookInter = i; G.lookEnt = -1; }
     }
 }
 
-static void CycleTool(int dir) {
-    std::vector<int> list = {TOOL_HANDS};
-    for (int t = TOOL_CAMERA; t < TOOL_COUNT; t++)
-        if (G.player.inv.Count(ToolItem(t)) > 0) list.push_back(t);
+static int WeaponSlot(int n) {
+    // n-esima arma nell'inventario (per i tasti 1-9 e la rotella)
+    int k = 0;
+    for (auto& s : G.player.inv.items) {
+        if (ITEMS[s.id].type != IT_WEAPON || s.id == I_GRENADE) continue;
+        if (k == n) return s.id;
+        k++;
+    }
+    return -2;
+}
+
+static void CycleWeapon(int dir) {
+    std::vector<int> list = {-1};
+    for (auto& s : G.player.inv.items)
+        if (ITEMS[s.id].type == IT_WEAPON && s.id != I_GRENADE) list.push_back(s.id);
     if (list.size() <= 1) return;
     int cur = 0;
     for (int i = 0; i < (int)list.size(); i++)
-        if (list[i] == G.player.tool) cur = i;
-    EquipTool(list[(cur + dir + (int)list.size()) % (int)list.size()]);
+        if (list[i] == G.player.weapon) cur = i;
+    int nx = (cur + dir + (int)list.size()) % (int)list.size();
+    int target = list[nx];
+    if (target == -1) EquipWeapon(G.player.weapon);
+    else EquipWeapon(target);
 }
 
 void PlayerUpdate(float dt) {
     Player& P = G.player;
     P.playTime += dt;
+    P.lastCombat += dt;
     // --- visuale ---
     Vector2 md = LookDelta();
     if (G.mouseSkip > 0) { G.mouseSkip--; md = V2(0, 0); }
-    float sens = 0.0022f * G.settings.sensitivity * (P.aimT > 0.5f ? 0.45f : 1.0f);
+    float sens = 0.0022f * G.settings.sensitivity * (P.aimT > 0.5f ? 0.55f : 1.0f);
     P.yaw -= md.x * sens;
     P.pitch -= md.y * sens * (G.settings.invertY ? -1.f : 1.f);
     P.pitch = Clamp(P.pitch, -1.5f, 1.5f);
@@ -523,7 +454,6 @@ void PlayerUpdate(float dt) {
         P.pipLight = !P.pipLight;
         PlaySfx(SFX_UI_MOVE);
     }
-    // nel browser Ctrl+W chiuderebbe la scheda: solo C
     if (IsKeyPressed(KEY_C) || (!DUSTFALL_WEB && IsKeyPressed(KEY_LEFT_CONTROL))) P.crouch = !P.crouch;
 
     // --- movimento ---
@@ -535,28 +465,25 @@ void PlayerUpdate(float dt) {
     if (IsKeyDown(KEY_A)) wish = wish - right;
     bool moving = Vector3Length(wish) > 0.1f;
     if (moving) wish = Vector3Normalize(wish);
-    bool zooming = IsMouseButtonDown(MOUSE_BUTTON_RIGHT) && P.tool == TOOL_CAMERA;
-    P.aimT = LerpF(P.aimT, zooming ? 1.0f : 0.0f, Clamp01(dt * 12));
+    bool aiming = IsMouseButtonDown(MOUSE_BUTTON_RIGHT) && !CurrentWeapon().melee;
+    P.aimT = LerpF(P.aimT, aiming ? 1.0f : 0.0f, Clamp01(dt * 12));
     bool encumbered = P.inv.Weight() > CarryMax();
-    P.sprint = IsKeyDown(KEY_LEFT_SHIFT) && moving && P.ap > 1 && !encumbered && !zooming && IsKeyDown(KEY_W);
+    P.sprint = IsKeyDown(KEY_LEFT_SHIFT) && moving && P.ap > 1 && !encumbered && !aiming && IsKeyDown(KEY_W);
     if (P.sprint && P.crouch) P.crouch = false;
-    float speed = P.crouch ? 2.2f : (P.sprint ? 7.2f + SkillValue(SK_ATHLETICS) * 0.01f : 4.4f);
-    if (zooming) speed = std::min(speed, 2.4f);
+    float speed = P.crouch ? 2.1f : (P.sprint ? 7.2f : 4.4f);
+    if (aiming) speed = std::min(speed, 2.6f);
     speed *= PlayerSpeedMul();
-    float apRegen = (7.0f + Spec(ST_AGI) * 0.7f) * (P.coffeeTimer > 0 ? 2.0f : 1.0f);
-    if (P.sprint) P.ap = std::max(0.0f, P.ap - (P.perks[PK_RUNNER] ? 5.5f : 11.0f) * (1.0f - SkillValue(SK_ATHLETICS) / 300.0f) * dt);
-    else P.ap = std::min(MaxAP(), P.ap + apRegen * dt);
+    if (P.sprint) P.ap = std::max(0.0f, P.ap - 11.0f * dt);
+    else P.ap = std::min(MaxAP(), P.ap + (7.0f + Spec(ST_AGI) * 0.7f) * dt);
     Vector3 target = wish * speed;
     float accel = P.onGround ? 14.0f : 2.0f;
     P.vel.x = LerpF(P.vel.x, target.x, Clamp01(dt * accel));
     P.vel.z = LerpF(P.vel.z, target.z, Clamp01(dt * accel));
-    float noise = 0;
     if (IsKeyPressed(KEY_SPACE) && P.onGround) {
-        P.vel.y = 5.4f + SkillValue(SK_ATHLETICS) * 0.012f;
+        P.vel.y = 5.4f;
         P.onGround = false;
         P.crouch = false;
         PlaySfx(SFX_JUMP, 0.5f);
-        noise = std::max(noise, 7.0f);
     }
     P.vel.y -= 18.0f * dt;
     Vector3 np = P.pos + P.vel * dt;
@@ -567,12 +494,8 @@ void PlayerUpdate(float dt) {
     if (np.y <= g + 0.02f || (wasGround && P.vel.y <= 0 && np.y - g < 0.45f)) {
         if (!wasGround) {
             float fall = P.fallStartY - g;
-            if (fall > 1.2f) {
-                PlaySfx(SFX_LAND, Clamp01(fall / 4));
-                noise = std::max(noise, 9.0f);
-            }
-            float safe = 5.5f + SkillValue(SK_ATHLETICS) * 0.02f;
-            if (fall > safe) PlayerHurt((fall - safe) * 12.0f, false);
+            if (fall > 1.2f) PlaySfx(SFX_LAND, Clamp01(fall / 4));
+            if (fall > 5.5f) PlayerTakeDamage((fall - 5.5f) * 14.0f, np, true);
         }
         np.y = g;
         P.vel.y = 0;
@@ -583,8 +506,6 @@ void PlayerUpdate(float dt) {
         P.onGround = false;
         P.fallStartY = std::max(P.fallStartY, np.y);
     }
-    float hsMove = DistXZ(P.pos, np);
-    P.walked += hsMove;
     P.pos = np;
     P.eyeH = LerpF(P.eyeH, P.crouch ? 1.05f : 1.62f, Clamp01(dt * 10));
 
@@ -596,44 +517,66 @@ void PlayerUpdate(float dt) {
             P.stepDist = 0;
             PlaySfx((SfxId)(SFX_STEP1 + gRng.irange(0, 3)), P.crouch ? 0.15f : (P.sprint ? 0.5f : 0.32f), gRng.range(0.9f, 1.1f));
         }
-        if (P.sprint) noise = std::max(noise, P.perks[PK_SOFTSTEP] ? 8.0f : 14.0f);
-        else if (!P.crouch) noise = std::max(noise, 4.0f);
     }
-    if (P.armor == I_EXOSUIT && hs > 0.5f) noise = std::max(noise, 10.0f);
-    if (P.stealthT > 0) noise *= 0.3f;
-    P.noise = noise;
 
-    // --- attrezzi ---
-    if (P.useCd > 0) P.useCd -= dt;
+    // --- armi ---
+    const WeaponDef& w = CurrentWeapon();
+    P.fireCd -= dt;
     if (P.equipT > 0) P.equipT -= dt;
     if (P.flash > 0) P.flash -= dt;
-    if (P.throwT > 0) {
-        P.throwT += dt / 0.45f;
-        if (P.throwT >= 1) P.throwT = 0;
+    P.recoil = std::max(0.0f, P.recoil - dt * 12);
+    if (P.reloadT > 0) {
+        P.reloadT -= dt;
+        if (P.reloadT <= 0) FinishReload();
     }
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && P.useCd <= 0 && P.equipT <= 0) UseTool();
-    if (IsKeyPressed(KEY_G) && P.useCd <= 0) ThrowTool(TOOL_NOISE);
-    if (IsKeyPressed(KEY_B) && P.useCd <= 0) ThrowTool(TOOL_BAIT);
+    if (P.swingT > 0) {
+        P.swingT += dt / 0.5f;
+        if (P.swingT > 0.38f && !P.swingDone) {
+            P.swingDone = true;
+            PlayerMeleeHit();
+        }
+        if (P.swingT >= 1) P.swingT = 0;
+    }
+    bool trigger = w.automatic ? IsMouseButtonDown(MOUSE_BUTTON_LEFT) : IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    if (trigger && P.fireCd <= 0 && P.reloadT <= 0 && P.equipT <= 0 && P.swingT <= 0) {
+        if (P.sprint) P.sprint = false;
+        PlayerFire();
+    }
+    if (IsKeyPressed(KEY_R)) PlayerReload();
+    if (IsKeyPressed(KEY_G) && P.fireCd <= 0) {
+        if (P.inv.Count(I_GRENADE) > 0) {
+            P.inv.Remove(I_GRENADE, 1);
+            Vector3 f = PlayerForward();
+            float pw = 13.0f + SkillValue(SK_EXPLOSIVES) * 0.05f;
+            ThrowGrenade(P.zone, PlayerEye() + f * 0.6f, f * pw + V3(0, 3.0f, 0), true);
+            PlaySfx(SFX_THROW);
+            P.fireCd = 0.8f;
+            P.swingT = 0.001f;
+            P.swingDone = true;
+        } else Notify("Non hai granate.");
+    }
     float wheel = GetMouseWheelMove();
-    if (wheel > 0.5f) CycleTool(1);
-    else if (wheel < -0.5f) CycleTool(-1);
-    for (int k = 0; k < TOOL_COUNT; k++)
-        if (IsKeyPressed(KEY_ONE + k)) EquipTool(k);
+    if (wheel > 0.5f) CycleWeapon(1);
+    else if (wheel < -0.5f) CycleWeapon(-1);
+    for (int k = 0; k < 9; k++)
+        if (IsKeyPressed(KEY_ONE + k)) {
+            int id = WeaponSlot(k);
+            if (id >= 0 && id != P.weapon) EquipWeapon(id);
+        }
     if (IsKeyPressed(KEY_H)) {
-        if (P.inv.Count(I_MEDKIT) > 0) UseItem(I_MEDKIT);
-        else Notify("Non hai kit medici.");
-    }
-    if (IsKeyPressed(KEY_F)) {
-        if (P.stealthT > 0) Notify("Il mantello ottico è già attivo.");
-        else if (P.inv.Count(I_STEALTHBOY) > 0) UseItem(I_STEALTHBOY);
-        else Notify("Non hai mantelli ottici.");
+        if (P.inv.Count(I_STIMPAK) > 0) UseItem(I_STIMPAK);
+        else Notify("Non hai stimpak.");
     }
 
     // --- interazione ---
     FindInteraction();
     if (IsKeyPressed(KEY_E)) {
         if (G.lookInter >= 0) Interact(G.lookInter);
-        else if (G.lookEnt >= 0 && !SearchStunnedEntity(G.lookEnt)) DialogueStart(G.lookEnt);
+        else if (G.lookEnt >= 0) {
+            Entity& e = G.ents[G.lookEnt];
+            if (e.stunned) LootOpen(-1, G.lookEnt);
+            else if (!e.hostile && !e.dlg.empty()) DialogueStart(G.lookEnt);
+        }
     }
 
     // --- radiazioni, cure, effetti ---
@@ -651,30 +594,20 @@ void PlayerUpdate(float dt) {
         }
     }
     if (P.rads >= 1000) {
-        P.rads = 999;
         P.hp = 0;
-        PlayerFaint();
+        SetGameState(GS_INCAPACITATED);
         return;
     }
-    if (P.hp > HPCap()) P.hp = HPCap();
     if (P.healOverTime > 0) {
         float a = std::min(P.healOverTime, 35.0f * dt);
         P.hp += a;
         P.healOverTime -= a;
     }
-    if (P.perks[PK_REGEN]) P.hp += 1.5f * dt;
+    if (P.perks[PK_REGEN] && P.lastCombat > 10) P.hp += 1.5f * dt;
     P.hp = std::min(P.hp, HPCap());
     if (P.radXTimer > 0) P.radXTimer -= dt;
-    if (P.teaTimer > 0) P.teaTimer -= dt;
-    if (P.coffeeTimer > 0) P.coffeeTimer -= dt;
-    if (P.catchImmune > 0) P.catchImmune -= dt;
-    if (P.stealthT > 0) {
-        P.stealthT -= dt;
-        if (P.stealthT <= 0) {
-            Notify("Il mantello ottico si è spento.", Col(150, 220, 255));
-            PlaySfx(SFX_STEALTH, 0.6f, 0.7f);
-        }
-    }
+    if (P.mentatsTimer > 0) P.mentatsTimer -= dt;
+    if (P.jetTimer > 0) P.jetTimer -= dt;
     if (P.hurtFlash > 0) P.hurtFlash = std::max(0.0f, P.hurtFlash - dt * 1.3f);
     if (P.pipLight) SpawnDynLight(P.zone, PlayerEye() + PlayerForward() * 0.5f, Col(160, 255, 170), 14, 0.03f);
 }
@@ -690,7 +623,8 @@ void UpdateCamera3D() {
     float bobAmt = P.onGround ? Clamp01(hs / 6.0f) : 0;
     Vector3 right = Vector3Normalize(Vector3CrossProduct(f, V3(0, 1, 0)));
     float fov = G.settings.fov;
-    fov = LerpF(fov, fov / 2.6f, P.aimT);
+    const WeaponDef& w = CurrentWeapon();
+    fov = LerpF(fov, fov / w.zoom, P.aimT);
     if (P.thirdPerson) {
         Vector3 desired = eye - f * 3.2f + right * 0.7f + V3(0, 0.35f, 0);
         Vector3 dir = desired - eye;
@@ -710,14 +644,16 @@ void UpdateCamera3D() {
 }
 
 // ---------------------------------------------------------------------------
-//  Mani e attrezzo in prima persona (disegnati vicinissimi alla camera)
+//  Arma in prima persona (disegnata vicinissima alla camera)
 // ---------------------------------------------------------------------------
 void DrawViewModel() {
     Player& P = G.player;
-    if (P.thirdPerson || P.aimT > 0.6f) return;
+    if (P.thirdPerson) return;
+    const WeaponDef& w = CurrentWeapon();
     Vector3 f = Vector3Normalize(G.cam.target - G.cam.position);
     Vector3 r = Vector3Normalize(Vector3CrossProduct(f, V3(0, 1, 0)));
     Vector3 u = Vector3CrossProduct(r, f);
+    // nello spazio camera +x è a destra: la base usa r come asse x
     Vector3 eye = G.cam.position;
     Matrix B = Matrix{r.x, u.x, f.x, eye.x, r.y, u.y, f.y, eye.y, r.z, u.z, f.z, eye.z, 0, 0, 0, 1};
     Matrix S = MatrixScale(0.1f, 0.1f, 0.1f) * B;
@@ -727,35 +663,73 @@ void DrawViewModel() {
     static Vector2 sway{0, 0};
     sway.x = LerpF(sway.x, Clamp(md.x * 0.0006f, -0.03f, 0.03f), Clamp01(GetFrameTime() * 8));
     sway.y = LerpF(sway.y, Clamp(md.y * 0.0006f, -0.03f, 0.03f), Clamp01(GetFrameTime() * 8));
-    Vector3 bob = V3(sinf(P.bob) * 0.012f * bobAmt - sway.x, fabsf(cosf(P.bob)) * 0.01f * bobAmt + sway.y, 0);
-    float lower = P.equipT > 0 ? P.equipT * 0.6f : 0;
+    float aim = P.aimT;
+    Vector3 hip = w.melee ? V3(0.2f, -0.24f, 0.55f) : V3(0.16f, -0.165f, 0.52f);
+    Vector3 ads = V3(0.0f, -0.072f, 0.42f);
+    if (w.model == WM_RIFLE) ads = V3(0.0f, -0.102f, 0.34f);
+    if (w.model == WM_MINIGUN) { hip = V3(0.16f, -0.22f, 0.5f); ads = V3(0.08f, -0.18f, 0.45f); }
+    Vector3 pos = Vector3Lerp(hip, ads, aim);
+    pos = pos + V3(sinf(P.bob) * 0.012f * bobAmt * (1 - aim * 0.8f) - sway.x, fabsf(cosf(P.bob)) * 0.01f * bobAmt * (1 - aim * 0.8f) + sway.y, -P.recoil * 0.004f);
+    float pitch = -P.recoil * 0.02f, yawA = 0, roll = 0;
+    if (P.sprint) {
+        pos = pos + V3(0.05f, -0.06f, -0.04f);
+        yawA += 0.6f;
+        pitch += 0.2f;
+    }
+    if (P.reloadT > 0) {
+        float t = 1.0f - P.reloadT / (w.reload * (P.perks[PK_FASTRELOAD] ? 0.6f : 1.0f));
+        float k = sinf(Clamp01(t) * PI);
+        pos.y -= 0.12f * k;
+        pitch += 0.6f * k;
+        roll += 0.4f * k;
+    }
+    if (P.equipT > 0) pos.y -= P.equipT * 0.6f;
+    if (P.swingT > 0) {
+        float t = P.swingT;
+        float k1 = t < 0.35f ? t / 0.35f : 1.0f, k2 = t < 0.35f ? 0 : (t - 0.35f) / 0.65f;
+        float s2 = sinf(k2 * PI);
+        if (w.model == WM_FIST) pos = pos + V3(-0.08f * s2, 0.04f * s2, 0.2f * s2);
+        else {
+            pos = pos + V3(0.05f * k1 - 0.25f * s2, 0.12f * k1 - 0.1f * s2, 0.08f * s2);
+            pitch += -1.0f * k1 + 1.8f * s2;
+            yawA += 0.8f * s2;
+            roll += 0.5f * s2;
+        }
+    }
+    Matrix wm = MatrixRotateXYZ(V3(pitch, yawA, roll)) * MatrixTranslate(pos.x, pos.y, pos.z);
     Color sleeve = OutfitColor(ArmorOutfit()), skin = Col(215, 170, 140);
-    if (P.armor == I_EXOSUIT) skin = Col(95, 98, 88);
-    if (P.sprint) lower += 0.05f;
-    // mano destra con l'attrezzo
-    Vector3 hand = V3(0.17f, -0.2f, 0.48f) + bob - V3(0, lower, 0);
-    float pitch = 0, yawA = 0;
-    if (P.throwT > 0) {
-        float t = P.throwT;
-        float k1 = t < 0.35f ? t / 0.35f : 1.0f, k2 = t < 0.35f ? 0 : sinf((t - 0.35f) / 0.65f * PI);
-        hand = hand + V3(0.04f * k1 - 0.1f * k2, 0.14f * k1 - 0.06f * k2, -0.12f * k1 + 0.2f * k2);
-        pitch = -0.9f * k1 + 1.2f * k2;
+    if (P.armor == I_POWER) skin = Col(95, 98, 88);
+    if (w.model == WM_FIST) {
+        for (int s = -1; s <= 1; s += 2) {
+            float jab = (s > 0 && P.swingT > 0.35f) ? sinf((P.swingT - 0.35f) / 0.65f * PI) : 0;
+            Vector3 fist = V3(s * 0.15f, -0.2f + jab * 0.05f, 0.45f + jab * 0.2f);
+            if (P.equipT > 0) fist.y -= P.equipT * 0.6f;
+            fist = fist + V3(sinf(P.bob) * 0.01f * bobAmt, 0, 0);
+            DrawLimb(S, V3(s * 0.25f, -0.5f, 0.2f), fist - V3(0, 0, 0.05f), 0.032f, sleeve);
+            DrawLimb(S, fist - V3(0, 0, 0.1f), fist - V3(0, 0, 0.03f), 0.03f, skin);
+            DrawPrim(PR_SPHERE, MatTRS(fist, V3(0, 0, 0), V3(0.075f, 0.068f, 0.085f)) * S, skin);
+        }
+        return;
     }
-    if (P.flash > 0.15f) hand.z -= 0.01f;
-    float toolScale = 0.75f;
-    if (P.tool == TOOL_CAMERA) {
-        // la fotocamera si tiene con due mani, in basso a destra
-        hand = V3(0.2f, -0.22f, 0.5f) + bob - V3(0, lower, 0);
-        toolScale = 0.6f;
+    Matrix W = wm * S;
+    float spin = (float)GetTime() * (IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? 25.0f : 2.0f);
+    DrawWeaponModel(W, w.model, P.flash > 0 ? 1.0f : 0.0f, spin);
+    // mani e braccia
+    Vector3 grip = Vector3Transform(V3(0, -0.04f, 0), wm);
+    DrawLimb(S, V3(0.3f, -0.5f, 0.22f), grip + V3(0.01f, -0.03f, -0.05f), 0.032f, sleeve);
+    DrawPrim(PR_CUBE, MatTRS(V3(0, -0.04f, -0.01f), V3(0, 0, 0), V3(0.05f, 0.06f, 0.08f)) * W, skin);
+    if (!w.melee && w.model != WM_GRENADE) {
+        Vector3 fore = Vector3Transform(V3(0, -0.02f, w.twoHanded ? 0.22f : 0.04f), wm);
+        DrawLimb(S, V3(-0.26f, -0.5f, 0.28f), fore + V3(-0.02f, -0.03f, -0.04f), 0.032f, sleeve);
+        DrawPrim(PR_CUBE, MatTRS(V3(-0.025f, -0.035f, w.twoHanded ? 0.22f : 0.04f), V3(0, 0, 0), V3(0.05f, 0.05f, 0.08f)) * W, skin);
     }
-    Matrix toolM = MatrixScale(toolScale, toolScale, toolScale) * MatrixRotateXYZ(V3(pitch, yawA, 0)) * MatrixTranslate(hand.x - (P.tool == TOOL_CAMERA ? 0.05f : 0), hand.y + 0.03f, hand.z);
-    DrawLimb(S, V3(0.3f, -0.5f, 0.22f), hand - V3(0, 0.02f, 0.06f), 0.032f, sleeve);
-    DrawPrim(PR_SPHERE, MatTRS(hand, V3(0, 0, 0), V3(0.07f, 0.065f, 0.085f)) * S, skin);
-    if (P.tool != TOOL_HANDS) DrawToolModel(toolM * S, P.tool, P.flash > 0 ? 1.0f : 0.0f);
-    // mano sinistra
-    Vector3 lh = P.tool == TOOL_CAMERA ? V3(0.1f, -0.23f, 0.5f) + bob - V3(0, lower, 0) : V3(-0.18f, -0.25f, 0.45f) + bob - V3(0, lower, 0);
-    DrawLimb(S, V3(-0.3f, -0.5f, 0.24f), lh - V3(0, 0.02f, 0.06f), 0.032f, sleeve);
-    DrawPrim(PR_SPHERE, MatTRS(lh, V3(0, 0, 0), V3(0.07f, 0.065f, 0.085f)) * S, skin);
+    // vampata
+    if (P.flash > 0 && !w.melee) {
+        float L = w.model == WM_RIFLE ? 0.78f : (w.model == WM_SHOTGUN ? 0.47f : (w.model == WM_ASSAULT ? 0.58f : (w.model == WM_MINIGUN ? 0.78f : (w.model == WM_LASERRIFLE || w.model == WM_PLASMA ? 0.62f : 0.18f))));
+        Color fc = w.energy ? w.beam : Col(255, 210, 120);
+        float sz = 0.05f + gRng.range(0, 0.04f);
+        DrawPrim(PR_SPHERE, MatTRS(V3(0, 0.03f, L), V3(0, 0, gRng.range(0, 3)), V3(sz, sz, sz * 2)) * W, fc, 1.0f);
+    }
 }
 
 void DrawPlayerBody() {
@@ -767,19 +741,8 @@ void DrawPlayerBody() {
     look.hairStyle = P.female ? 2 : 1;
     look.hair = Col(70, 50, 35);
     look.skin = Col(215, 170, 140);
+    const WeaponDef& w = CurrentWeapon();
     float hs = Vector3Length(V3(P.vel.x, 0, P.vel.z));
-    float hold = P.tool == TOOL_CAMERA ? 1.0f : (P.tool != TOOL_HANDS ? 0.4f : 0.0f);
-    float action = P.throwT;
-    if (NetLocalWave() > 0 && action <= 0) {
-        // saluto agli altri giocatori (tasto Z)
-        hold = 0;
-        action = 0.2f + 0.15f * sinf(G.time * 12.0f);
-    }
-    DrawHumanoid(P.pos, P.yaw, look, P.bob * 1.1f, Clamp01(hs / 4.5f), hold, action, 0, P.tool, P.flash > 0 ? 1 : 0, 1.0f, false, P.crouch ? 1.0f : 0.0f);
-    if (P.stealthT > 0) {
-        // alone azzurro del mantello ottico
-        BeginBlendMode(BLEND_ADDITIVE);
-        DrawSphere(P.pos + V3(0, 1, 0), 0.9f, ColAlpha(Col(80, 160, 255), 0.12f));
-        EndBlendMode();
-    }
+    float aim = w.melee ? 0 : (P.lastCombat < 3 || P.aimT > 0.1f || IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? 1.0f : 0.3f);
+    DrawHumanoid(P.pos, P.yaw, look, P.bob * 1.1f, Clamp01(hs / 4.5f), aim, P.swingT, 0, w.model, P.flash > 0 ? 1 : 0, 1.0f, false, P.crouch ? 1.0f : 0.0f);
 }

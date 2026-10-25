@@ -314,15 +314,14 @@ void Tire(float x, float z) {
     Z->B(b).Torus(MatTRS(b, V3(0, gen.range(0, 3), 0), V3(1, 1, 1)), 0.32f, 0.12f, 10, 6, Col(28, 28, 28));
 }
 
-// sterpaglia: rami secchi e sassi sparsi
-void Brush(float x, float z, int n) {
+void Bones(float x, float z, int n) {
     for (int i = 0; i < n; i++) {
         float bx = x + gen.range(-2.5f, 2.5f), bz = z + gen.range(-2.5f, 2.5f);
         float g = GY(bx, bz);
         Vector3 a = V3(bx, g + 0.06f, bz);
         float ang = gen.range(0, 6.28f), l = gen.range(0.4f, 1.1f);
-        Z->B(a).Cylinder(MatAlignY(a, a + V3(sinf(ang) * l, gen.range(0.0f, 0.3f), cosf(ang) * l), 0.04f), 4, C_WOOD_D);
-        if (gen.chance(0.3f)) Z->B(a).Sphere(MatTRS(a + V3(0, 0.05f, 0), V3(0, gen.range(0, 3), 0), V3(0.3f, 0.18f, 0.25f)), 3, 5, Col(120, 110, 96));
+        Z->B(a).Cylinder(MatAlignY(a, a + V3(sinf(ang) * l, 0.03f, cosf(ang) * l), 0.05f), 5, C_BONE);
+        if (gen.chance(0.25f)) Z->B(a).Sphere(MatTRS(a + V3(0, 0.1f, 0), V3(0, 0, 0), V3(0.28f, 0.24f, 0.3f)), 4, 6, C_BONE);
     }
 }
 
@@ -396,7 +395,7 @@ Vector3 ContSize(int model) {
 const char* ContName(int model) {
     switch (model) {
         case CM_CRATE: return "Cassa";
-        case CM_AMMOBOX: return "Cassetta militare";
+        case CM_AMMOBOX: return "Cassetta di munizioni";
         case CM_FIRSTAID: return "Cassetta di pronto soccorso";
         case CM_FRIDGE: return "Frigorifero";
         case CM_DESK: return "Scrivania";
@@ -451,7 +450,7 @@ Entity& NPC(int zone, float x, float z, float yaw, const char* name, const char*
     return e;
 }
 
-Entity& Raider(float x, float z, const char* tag = "") {
+Entity& Raider(float x, float z, int weapon, const char* tag = "") {
     Entity& e = Spawn(EK_HUMAN, ZONE_WASTE, x, z, gen.range(0, 6.28f));
     e.name = "Predone";
     e.tag = tag;
@@ -463,10 +462,19 @@ Entity& Raider(float x, float z, const char* tag = "") {
     e.look.hair = gen.chance(0.5f) ? Col(170, 40, 30) : Col(40, 30, 25);
     e.look.skin = ColJitter(Col(200, 155, 125), gen, 0.15f);
     e.look.hat = gen.chance(0.3f) ? 3 : 0;
-    e.detect = 28;
-    e.speed = 4.6f;
-    e.territory = 34;
+    e.weapon = weapon;
+    e.maxHp = e.hp = 60;
+    e.dr = 8;
+    e.xp = 20;
+    e.accuracy = 0.45f;
+    e.detect = 32;
     e.wanderRadius = 7;
+    e.inv.Add(I_CAPS, gen.irange(3, 25));
+    if (WEAPONS[ITEMS[weapon].weapon].ammo >= 0) e.inv.Add(WEAPONS[ITEMS[weapon].weapon].ammo, gen.irange(4, 14));
+    e.inv.Add(weapon, 1);
+    if (gen.chance(0.3f)) e.inv.Add(I_STIMPAK);
+    if (gen.chance(0.3f)) e.inv.Add(I_JET);
+    if (gen.chance(0.5f)) e.inv.Add(I_RAIDER);
     return e;
 }
 
@@ -831,14 +839,6 @@ void BuildTown() {
         Z->B(tc).Cylinder(MatTRS(tc + V3(0, 2.9f, 0), V3(0, 0, 0), V3(6.4f, 1.4f, 6.4f)), 16, C_RUST, true, 0.2f);
         Vis(V3(tx, g + 10.1f, tz), V3(5.5f, 0.2f, 5.5f), C_RUST);
         AddSign(V3(tx, g + 12.6f, tz + 3.12f), 0, 4.0f, 1.0f, "ACQUA", Col(120, 115, 105), Col(40, 60, 90));
-        // pompa guasta: la ripara il giocatore (missione "Acqua per Ferrocittà")
-        float px = tx + 4.2f, pz = tz + 1.0f;
-        Interactable& pump = AddInter(INT_REPAIR, ZONE_WASTE, V3(px, GY(px, pz), pz), PI / 2, "Pompa dell'acqua", "pump");
-        pump.skillReq = 20;
-        pump.partsReq = 2;
-        pump.size = V3(1.2f, 1.8f, 1.2f);
-        Coll(V3(px, GY(px, pz) + 0.9f, pz), V3(1.0f, 1.8f, 1.0f), true);
-        Cyl(V3(tx + 1.8f, g + 0.2f, tz + 1.0f), 0.08f, 10.0f, C_METAL_D, 5, false);
     }
     // piazza centrale: fuochi, panche, luci
     FireBarrel(cx + 3, cz + 2);
@@ -880,6 +880,9 @@ void BuildTown() {
         Entity& e = NPC(ZONE_WASTE, cx - 19, cz - 9, PI * 0.1f, "Sceriffo Marta Vance", "sheriff", OF_SHERIFF, true, FAC_TOWN);
         e.look.hat = 1;
         e.look.hair = Col(150, 90, 50);
+        e.weapon = I_PISTOL;
+        e.maxHp = e.hp = 220;
+        e.dr = 15;
         e.essential = true;
         e.wanderRadius = 2;
     }
@@ -903,19 +906,13 @@ void BuildTown() {
         e.essential = true;
     }
     {
-        Entity& e = NPC(ZONE_WASTE, cx + 6, cz + 4, -PI / 2, "Jack Falco, naturalista", "naturalist", OF_LEATHER, false, FAC_TOWN);
+        Entity& e = NPC(ZONE_WASTE, cx + 6, cz + 4, -PI / 2, "Jack Falco", "hunter", OF_LEATHER, false, FAC_TOWN);
+        e.weapon = I_HUNTRIFLE;
         e.look.hat = 1;
         e.essential = true;
         e.wanderRadius = 2.5f;
     }
-    {
-        Entity& e = NPC(ZONE_WASTE, cx - 7, cz + 29, PI, "Rita", "rita", OF_SETTLER, true, FAC_TOWN);
-        e.look.shirt = Col(150, 90, 70);
-        e.look.hair = Col(150, 110, 60);
-        e.essential = true;
-        e.wanderRadius = 2.5f;
-    }
-    const char* names[] = {"Pino", "Lia", "Bruno", "Carla", "Enzo", "Nina"};
+    const char* names[] = {"Pino", "Rita", "Bruno", "Carla", "Enzo", "Nina"};
     for (int i = 0; i < 6; i++) {
         float a = gen.range(0, 6.28f), r = gen.range(6, 25);
         Entity& e = NPC(ZONE_WASTE, cx + sinf(a) * r, cz + cosf(a) * r, a, names[i], "settler", OF_SETTLER, i % 2 == 1, FAC_TOWN);
@@ -928,7 +925,11 @@ void BuildTown() {
         float ga = (i == 0) ? 0 : (i == 1 ? PI / 2 : PI);
         float px = cx + sinf(ga) * 40, pz = cz + cosf(ga) * 40;
         Entity& e = NPC(ZONE_WASTE, px + 3, pz, ga, "Guardia di Ferrocittà", "guard", OF_GUARD, i == 1, FAC_TOWN);
+        e.weapon = i == 2 ? I_HUNTRIFLE : I_PISTOL;
         e.look.hat = 2;
+        e.maxHp = e.hp = 150;
+        e.dr = 18;
+        e.accuracy = 0.7f;
         e.wanderRadius = 2;
     }
 }
@@ -993,11 +994,6 @@ void BuildGasStation() {
     Barrel(cx + 15, cz + 5, C_RUST);
     Barrel(cx + 15.7f, cz + 5.6f, Col(60, 90, 60));
     W.locations.push_back({"Stazione Atomo", V3(cx, g, cz), 25, false, V3(cx - 10, g, cz - 14), 0});
-    // i sacchi di cibo marcio che attirano i radscarafaggi
-    ItemOnGround(ZONE_WASTE, V3(cx, g, cz + 1.5f), I_ROTFOOD, 1, "roach_sack");
-    ItemOnGround(ZONE_WASTE, V3(sx - 3.5f, g + 0.2f, sz + 2.6f), I_ROTFOOD, 1, "roach_sack");
-    ItemOnGround(ZONE_WASTE, V3(ox - 3.0f, g, oz + 3.0f), I_ROTFOOD, 1, "roach_sack");
-    ItemOnGround(ZONE_WASTE, V3(ox + 2.6f, g, oz - 1.5f), I_PARTS, 1);
     // radscarafaggi
     for (int i = 0; i < 7; i++) {
         float px = cx + gen.range(-10, 10), pz = cz + gen.range(-6, 16);
@@ -1028,18 +1024,14 @@ void BuildRaiderCamp() {
         }
         if (gen.chance(0.3f)) Car(px + sinf(a) * 3, pz + cosf(a) * 3, a + PI / 2, ColJitter(ColLerp(C_RUST_L, Col(120, 115, 105), 0.5f), gen, 0.2f));
     }
-    // totem di coprimozzi e lattine all'ingresso
+    // teschi sulle picche all'ingresso
     for (int s = -1; s <= 1; s += 2) {
         for (int k = 0; k < 2; k++) {
             float px = cx - R0 - 3 - k * 3, pz = cz + s * 6;
             float gg = GY(px, pz);
             Cyl(V3(px, gg, pz), 0.06f, 2.6f, C_WOOD_D, 5, false);
-            Vector3 hc = V3(px, gg + 2.4f, pz);
-            Z->B(hc).Cylinder(MatTRS(hc, V3(0, 0, PI / 2), V3(0.7f, 0.06f, 0.7f)), 10, Col(180, 180, 175));
-            for (int c = 0; c < 3; c++) {
-                Vector3 cp = V3(px, gg + 1.2f + c * 0.35f, pz + 0.12f);
-                Z->B(cp).Cylinder(MatTRS(cp, V3(0, 0, 0), V3(0.14f, 0.2f, 0.14f)), 6, CORR[(k + c) % 6]);
-            }
+            Vector3 sk = V3(px, gg + 2.75f, pz);
+            Z->B(sk).Sphere(MatTRS(sk, V3(0, 0, 0), V3(0.32f, 0.36f, 0.34f)), 5, 7, C_BONE);
         }
     }
     AddSign(V3(cx - R0 - 1, g + 3.6f, cz), -PI / 2, 4.5f, 1.0f, "STATE ALLA LARGA", Col(90, 70, 50), Col(200, 40, 30));
@@ -1047,15 +1039,7 @@ void BuildRaiderCamp() {
     // baracca del capo (porta a ovest)
     float bx = cx + 10, bz = cz - 2;
     Shack(bx, bz, 11, 9, 3.6f, SIDE_W, 0, Col(110, 70, 50));
-    {
-        // la tessera di Delta-9 è custodita qui
-        Interactable& safe = Cont(ZONE_WASTE, bx + 4, bz - 3, PI, CM_SAFE, 3, 4, "boss_safe");
-        safe.keyItem = I_SAFEKEY;
-        safe.inv.Clear();
-        safe.inv.Add(I_KEYCARD);
-        safe.inv.Add(I_CAPS, 90);
-        safe.inv.Add(I_STEALTHBOY);
-    }
+    Cont(ZONE_WASTE, bx + 4, bz - 3, PI, CM_SAFE, 3, 3, "boss_safe");
     Interactable& term = AddInter(INT_TERMINAL, ZONE_WASTE, V3(bx + 4.2f, g + 1.0f, bz + 2.8f), -PI / 2, "Terminale dei Teschi", "raider_term");
     term.terminal = TERM_RAIDER;
     term.hackLevel = 1;
@@ -1070,13 +1054,7 @@ void BuildRaiderCamp() {
         Color tcol = ColJitter(Col(120, 105, 80), gen, 0.15f);
         VisM(MatTRS(V3(0, 0, 0), V3(0, 0, PI / 4), V3(2.2f, 2.2f, 3.5f)) * MatrixRotateY(a) * MatrixTranslate(tc.x, tc.y - 0.5f, tc.z), tcol, tc);
         Z->AddCyl(tx, tz, 1.4f, gg, gg + 1.5f);
-        Interactable& fl = Cont(ZONE_WASTE, tx + 1.8f, tz, a, CM_FOOTLOCKER, 2, gen.chance(0.4f) ? 2 : 0);
-        if (i == 2) {
-            // qualcuno ha nascosto la chiave di riserva della cassaforte
-            fl.lock = 2;
-            fl.locked = true;
-            fl.inv.Add(I_SAFEKEY);
-        }
+        Cont(ZONE_WASTE, tx + 1.8f, tz, a, CM_FOOTLOCKER, 2, gen.chance(0.4f) ? 2 : 0);
     }
     // torretta di guardia con scale
     float wx = cx - 14, wz = cz + 12;
@@ -1109,38 +1087,30 @@ void BuildRaiderCamp() {
     Cont(ZONE_WASTE, cx - 8, cz - 15, 0.3f, CM_AMMOBOX, 2);
     Cont(ZONE_WASTE, cx + 15, cz + 12, 0, CM_CRATE, 2);
     W.locations.push_back({"Covo dei Teschi", V3(cx, g, cz), 35, false, V3(cx - 48, g, cz + 2), 0});
-    // la banda dei Teschi: territoriali, ma con un lasciapassare ti lasciano in pace
+    // predoni
     {
-        Entity& e = Raider(bx - 1, bz, "boss");
+        Entity& e = Raider(bx, bz, I_ASSAULT, "boss");
         e.name = "Teschio";
-        e.dlg = "boss";
+        e.maxHp = e.hp = 240;
+        e.dr = 20;
+        e.xp = 120;
+        e.accuracy = 0.6f;
         e.look.hairStyle = 3;
         e.look.hat = 0;
         e.look.hair = Col(220, 220, 210);
         e.scale = 1.08f;
-        e.wanderRadius = 1.5f;
-        e.territory = 16;
-        e.essential = true;
+        e.wanderRadius = 2;
+        e.inv.Add(I_KEYCARD);
+        e.inv.Add(I_CAPS, 150);
+        e.inv.Add(I_SAFEKEY);
+        e.inv.Add(I_STIMPAK, 2);
+        e.inv.Add(I_COMBAT);
     }
-    {
-        Entity& e = Raider(cx - R0 - 2, cz + 3, "bruto");
-        e.name = "Bruto, il guardiano";
-        e.dlg = "raider_guard";
-        e.hostile = false;
-        e.look.hat = 3;
-        e.scale = 1.1f;
-        e.wanderRadius = 1;
-        e.essential = true;
-    }
-    for (int i = 0; i < 7; i++) {
+    int weapons[] = {I_PISTOL, I_PIPE, I_BAT, I_HUNTRIFLE, I_SHOTGUN, I_PISTOL, I_KNIFE, I_PISTOL};
+    for (int i = 0; i < 8; i++) {
         float a = gen.range(0, 6.28f), r = gen.range(6, 22);
-        if (i == 3) {
-            Entity& e = Raider(wx, wz);
-            e.pos.y = e.home.y = wg + 3.6f;
-            e.name = "Vedetta dei Teschi";
-            e.detect = 40;
-            e.wanderRadius = 0.5f;
-        } else Raider(cx + sinf(a) * r, cz + cosf(a) * r).dlg = "raider";
+        if (i == 3) Raider(wx, wz, I_HUNTRIFLE).pos.y = wg + 3.6f;
+        else Raider(cx + sinf(a) * r, cz + cosf(a) * r, weapons[i]);
     }
 }
 
@@ -1207,13 +1177,6 @@ void BuildBaseExterior() {
         }
         Cont(ZONE_WASTE, bx + 8.3f, bz, -PI / 2, CM_LOCKER, 3, 1, "", g + 0.1f);
         Light(V3(bx, g + 3.3f, bz), Col(230, 230, 210), 10, 0.6f, 0.4f);
-        if (k == 0) {
-            Solid(V3(bx - 8.3f, g + 0.55f, bz), V3(0.9f, 0.9f, 1.4f), C_METAL_D, true);
-            Interactable& st = AddInter(INT_TERMINAL, ZONE_WASTE, V3(bx - 8.3f, g + 1.25f, bz), PI / 2, "Terminale di sicurezza esterno", "sec_term_out");
-            st.terminal = TERM_SECURITY;
-            st.hackLevel = 1;
-            st.size = V3(0.5f, 0.5f, 0.5f);
-        }
     }
     // ingresso del bunker
     float ex = 278, ez = 220;
@@ -1249,12 +1212,12 @@ void BuildBaseExterior() {
     Cont(ZONE_WASTE, 262, 196, 0, CM_AMMOBOX, 3);
     Cont(ZONE_WASTE, 288, 250, 0.4f, CM_AMMOBOX, 3);
     W.locations.push_back({"Base Delta-9", V3(250, g, 220), 55, false, V3(185, g, 222), 3});
-    // sorveglianza: sentinelle di pattuglia e telecamere all'ingresso del bunker
+    // difese
     Entity& r1 = Spawn(EK_ROBOT, ZONE_WASTE, 235, 220, -PI / 2);
     r1.patrol = {V3(225, g, 205), V3(265, g, 205), V3(265, g, 240), V3(225, g, 240)};
     Spawn(EK_ROBOT, ZONE_WASTE, 285, 195, 0).patrol = {V3(285, g, 190), V3(285, g, 255)};
-    Spawn(EK_CAMERA, ZONE_WASTE, ex - 8, ez - 9, -PI / 2 - 0.4f);
-    Spawn(EK_CAMERA, ZONE_WASTE, ex - 8, ez + 9, -PI / 2 + 0.4f);
+    Spawn(EK_TURRET, ZONE_WASTE, ex - 8, ez - 9, -PI / 2);
+    Spawn(EK_TURRET, ZONE_WASTE, ex - 8, ez + 9, -PI / 2);
 }
 
 void BuildFarm() {
@@ -1308,28 +1271,7 @@ void BuildFarm() {
     DeadTree(cx + 4, cz + 18, 7);
     Car(cx - 2, cz - 18, 0.7f, Col(110, 120, 90));
     W.locations.push_back({"Fattoria Abbandonata", V3(cx, g, cz), 30, false, V3(cx - 18, g, cz - 20), 0});
-    // generatore guasto dietro la casa
-    {
-        float px = hx + 6.5f, pz = hz;
-        Interactable& gen1 = AddInter(INT_REPAIR, ZONE_WASTE, V3(px, GY(px, pz), pz), -PI / 2, "Generatore della fattoria", "generator");
-        gen1.skillReq = 35;
-        gen1.partsReq = 1;
-        gen1.size = V3(1.6f, 1.2f, 1.0f);
-        Coll(V3(px, GY(px, pz) + 0.5f, pz), V3(1.0f, 1.0f, 1.7f), true);
-    }
-    ItemOnGround(ZONE_WASTE, V3(bx + 3.5f, g, bz - 4.5f), I_PARTS, 2);
-    for (int i = 0; i < 4; i++) Spawn(EK_MOLERAT, ZONE_WASTE, cx + 12 + gen.range(0, 16), cz + 8 + gen.range(0, 14), gen.range(0, 6.28f));
-    {
-        // Ruggine, il cane di Rita, si è rifugiato nel fienile
-        Entity& d = Spawn(EK_DOG, ZONE_WASTE, bx - 2, bz + 4, PI);
-        d.name = "Ruggine";
-        d.tag = "ruggine";
-        d.dlg = "ruggine";
-        d.photoKey = "ruggine";
-        d.hostile = false;
-        d.wanderRadius = 3;
-        d.essential = true;
-    }
+    for (int i = 0; i < 4; i++) Spawn(EK_MOLERAT, ZONE_WASTE, cx + gen.range(-15, 20), cz + gen.range(-5, 20), gen.range(0, 6.28f));
 }
 
 void BuildRadioTower() {
@@ -1359,68 +1301,25 @@ void BuildRadioTower() {
     Vector3 top = V3(cx, g + H + 0.6f, cz);
     Z->B(top).Sphere(MatTRS(top, V3(0, 0, 0), V3(0.6f, 0.6f, 0.6f)), 5, 6, Glow(Col(255, 40, 30)));
     Light(top, Col(255, 40, 30), 14, 1.0f, 0.9f);
-    // piattaforma a metà torre con il trasmettitore e la scala per salirci
-    float py = g + 16;
-    Slab(cx - 2.6f, cz - 2.6f, cx + 2.6f, cz + 2.6f, py, 0.2f, C_METAL_D);
-    Wall(cx - 2.6f, cz + 2.6f, cx + 2.6f, cz + 2.6f, py, 1.0f, 0.08f, C_RUST, {}, WS_RIBBED);
-    Wall(cx - 2.6f, cz - 2.6f, cx - 2.6f, cz + 2.6f, py, 1.0f, 0.08f, C_RUST, {}, WS_RIBBED);
-    Wall(cx + 2.6f, cz - 2.6f, cx + 2.6f, cz + 2.6f, py, 1.0f, 0.08f, C_RUST, {}, WS_RIBBED);
-    Wall(cx - 2.6f, cz - 2.6f, cx - 0.9f, cz - 2.6f, py, 1.0f, 0.08f, C_RUST, {}, WS_RIBBED);
-    Wall(cx + 0.9f, cz - 2.6f, cx + 2.6f, cz - 2.6f, py, 1.0f, 0.08f, C_RUST, {}, WS_RIBBED);
-    {
-        // scala a pioli sul lato sud
-        float lz = cz - 3.0f;
-        for (int s = -1; s <= 1; s += 2) {
-            Vector3 a = V3(cx + s * 0.4f, g - 0.2f, lz), b = V3(cx + s * 0.4f, py + 1.0f, lz);
-            Z->B(a).Cylinder(MatAlignY(a, b, 0.04f), 4, C_METAL_D, false);
-        }
-        for (float y = g + 0.3f; y < py + 0.8f; y += 0.4f) {
-            Vector3 r = V3(cx, y, lz);
-            Z->B(r).Cylinder(MatAlignY(r - V3(0.4f, 0, 0), r + V3(0.4f, 0, 0), 0.025f), 4, C_METAL, false);
-        }
-        Interactable& up = AddInter(INT_LADDER, ZONE_WASTE, V3(cx, g + 1.0f, lz), 0, "Sali sulla torre", "tower_up");
-        up.targetPos = V3(cx, py, cz - 1.6f);
-        up.targetYaw = 0;
-        up.size = V3(1, 2, 1);
-        Interactable& dn = AddInter(INT_LADDER, ZONE_WASTE, V3(cx, py + 0.6f, cz - 2.4f), 0, "Scendi dalla torre", "tower_down");
-        dn.targetPos = V3(cx, g, lz - 1.4f);
-        dn.targetYaw = PI;
-        dn.size = V3(1, 1.5f, 1);
-    }
-    {
-        Interactable& tr = AddInter(INT_REPAIR, ZONE_WASTE, V3(cx, py + 0.1f, cz + 1.7f), PI, "Trasmettitore radio", "transmitter");
-        tr.skillReq = 15;
-        tr.partsReq = 1;
-        tr.size = V3(1.2f, 1.3f, 0.6f);
-        Coll(V3(cx, py + 0.7f, cz + 1.7f), V3(1.3f, 1.2f, 0.7f), true);
-    }
-    // baracca dell'esploratrice (porta a est)
+    // baracca con l'esploratore privo di sensi (porta a est)
     float hx = cx + 8, hz = cz + 6;
     Shack(hx, hz, 5, 4, 2.8f, SIDE_E, 0, Col(120, 116, 108), true);
     Cont(ZONE_WASTE, hx - 1.2f, hz + 0.6f, 0, CM_DESK, 1, 0, "", g + 0.27f);
-    ItemOnGround(ZONE_WASTE, V3(hx - 1.6f, g + 1.07f, hz + 0.6f), I_RECORD, 1, "record");
     {
-        Interactable& c = Cont(ZONE_WASTE, hx + 1.4f, hz - 1.3f, 0, CM_NONE, 1, 0, "scout_pack", g + 0.27f);
-        c.name = "Zaino di Vera";
+        Interactable& c = Cont(ZONE_WASTE, hx - 0.2f, hz - 1.2f, 0, CM_NONE, 0, 0, "scout", g + 0.27f);
+        c.name = "Esploratore privo di sensi";
         c.inv.Clear();
         c.inv.Add(I_SCOUTNOTE);
         c.inv.Add(I_CACHEKEY);
-        c.inv.Add(I_WATER, 2);
-        c.inv.Add(I_BAIT, 2);
-        c.inv.Add(I_CAPS, 25);
-        c.size = V3(0.6f, 0.7f, 0.5f);
-    }
-    {
-        Entity& v = NPC(ZONE_WASTE, hx - 0.6f, hz - 1.0f, PI / 2, "Vera, l'esploratrice", "scout", OF_LEATHER, true, FAC_TOWN);
-        v.look.hat = 3;
-        v.look.hair = Col(60, 40, 30);
-        v.wanderRadius = 0;
-        v.essential = true;
+        c.inv.Add(I_AMMO_10, 18);
+        c.inv.Add(I_STIMPAK, 1);
+        c.inv.Add(I_CAPS, 35);
+        c.size = V3(1.8f, 0.3f, 0.6f);
     }
     Barrel(cx - 5, cz + 4, C_RUST);
     Pole(cx + 14, cz - 6, 7);
     W.locations.push_back({"Torre Radio", V3(cx, g, cz), 18, false, V3(cx + 20, g, cz - 2), 0});
-    for (int i = 0; i < 3; i++) Spawn(EK_DOG, ZONE_WASTE, cx - 14 + gen.range(-8, 8), cz + gen.range(-10, 10), gen.range(0, 6.28f));
+    for (int i = 0; i < 3; i++) Spawn(EK_DOG, ZONE_WASTE, cx + gen.range(-12, 12), cz + gen.range(-12, 12), gen.range(0, 6.28f));
 }
 
 void BuildCrater() {
@@ -1468,13 +1367,13 @@ void BuildCrater() {
     {
         Interactable& c = Cont(ZONE_WASTE, sx, sz - 1.5f, 0, CM_FOOTLOCKER, 3, 5, "cache", sg + 0.1f);
         c.keyItem = I_CACHEKEY;
-        c.name = "Baule di Vera";
+        c.name = "Baule dell'esploratore";
         c.inv.Clear();
+        c.inv.Add(I_LASERRIFLE);
+        c.inv.Add(I_AMMO_CELL, 60);
         c.inv.Add(I_RADSUIT);
-        c.inv.Add(I_STEALTHBOY, 2);
         c.inv.Add(I_RADAWAY, 3);
-        c.inv.Add(I_MEDKIT, 3);
-        c.inv.Add(I_PARTS, 2);
+        c.inv.Add(I_STIMPAK, 3);
         c.inv.Add(I_CAPS, 120);
     }
     Cont(ZONE_WASTE, sx + 1.5f, sz + 0.5f, 0, CM_AMMOBOX, 2, 0, "", sg + 0.1f);
@@ -1483,16 +1382,19 @@ void BuildCrater() {
     {
         Entity& e = Spawn(EK_GHOUL, ZONE_WASTE, cx + 3, cz + 3, 0);
         e.name = "Ghoul luminoso";
-        e.photoKey = "glowghoul";
         e.glow = true;
+        e.maxHp = e.hp = 160;
+        e.dr = 10;
+        e.xp = 45;
         e.radAura = 6;
+        e.meleeDmg = 16;
     }
 }
 
 void BuildCanyon() {
     float cx = L_CANYON.x, cz = L_CANYON.z;
     float g = GY(cx, cz);
-    for (int i = 0; i < 6; i++) Brush(cx + gen.range(-12, 12), cz + gen.range(-12, 12), gen.irange(3, 7));
+    for (int i = 0; i < 6; i++) Bones(cx + gen.range(-12, 12), cz + gen.range(-12, 12), gen.irange(3, 7));
     // nido
     for (int i = 0; i < 12; i++) {
         float a = i / 12.0f * 2 * PI;
@@ -1512,19 +1414,17 @@ void BuildCanyon() {
         RockProp(cx + sinf(a) * r, cz + cosf(a) * r, gen.range(2.0f, 5.0f), Col(110, 95, 82));
     }
     {
-        // lo zaino che Jack ha perso scappando: è proprio accanto alla bestia addormentata
-        Interactable& c = Cont(ZONE_WASTE, cx + 6, cz + 5, 0.6f, CM_NONE, 2, 0, "jack_pack");
-        c.name = "Zaino di Jack";
-        c.inv.Clear();
-        c.inv.Add(I_JOURNAL);
-        c.inv.Add(I_MEAT, 2);
-        c.inv.Add(I_CAPS, 40);
-        c.size = V3(0.6f, 0.7f, 0.5f);
+        Interactable& c = Cont(ZONE_WASTE, cx + 9, cz + 7, 0, CM_NONE, 2, 0, "");
+        c.name = "Resti di un cacciatore";
+        c.inv.Add(I_HUNTRIFLE);
+        c.inv.Add(I_AMMO_308, 20);
+        c.size = V3(1.8f, 0.3f, 0.6f);
     }
     W.locations.push_back({"Gola dello Squarciatore", V3(cx, g, cz), 25, false, V3(-190, GY(-190, -200), -200), 4});
     Entity& e = Spawn(EK_DEATHCLAW, ZONE_WASTE, cx, cz + 3, 0);
     e.tag = "beast";
     e.name = "Squarciatore";
+    e.inv.Add(I_CLAW);
 }
 
 // edificio in rovina su più piani con scala interna
@@ -1608,7 +1508,7 @@ void BuildRuins() {
         Interactable& c = Cont(ZONE_WASTE, 98.8f, -196, -PI / 2, CM_LOCKER, 2, 2, "meds", g + 0.15f);
         c.name = "Armadietto medico";
         c.inv.Add(I_MEDSUPPLIES);
-        c.inv.Add(I_MEDKIT, 2);
+        c.inv.Add(I_STIMPAK, 2);
         Cont(ZONE_WASTE, 59.2f, -196, PI / 2, CM_FIRSTAID, 2, 0, "", g + 0.15f);
         Cont(ZONE_WASTE, 70, -172, PI, CM_DESK, 2, 0, "", g + 0.15f);
         Cont(ZONE_WASTE, 90, -183, 0, CM_FIRSTAID, 2, 0, "", g + 3.6f);
@@ -1657,15 +1557,25 @@ void BuildRuins() {
         FireBarrel(mx, mz);
         for (int i = 0; i < 3; i++) Vis(V3(mx - 5 + i * 3, g + 0.15f, mz + 6), V3(1.2f, 0.3f, 2.2f), Col(140, 120, 100));
         for (int i = 0; i < 6; i++) Barrel(mx + gen.range(-12, 12), mz + gen.range(-10, 10), CORR[gen.irange(0, 5)]);
-        Brush(mx + 4, mz - 4, 6);
+        Bones(mx + 4, mz - 4, 6);
         Cont(ZONE_WASTE, mx + 8, mz + 5, 0, CM_CRATE, 3);
         Cont(ZONE_WASTE, mx - 9, mz - 6, 0, CM_AMMOBOX, 3);
-        for (int i = 0; i < 4; i++) Spawn(EK_MUTANT, ZONE_WASTE, mx + gen.range(-8, 8), mz + gen.range(-8, 8), gen.range(0, 6.28f));
+        for (int i = 0; i < 4; i++) {
+            Entity& e = Spawn(EK_MUTANT, ZONE_WASTE, mx + gen.range(-8, 8), mz + gen.range(-8, 8), gen.range(0, 6.28f));
+            e.weapon = i % 2 == 0 ? I_ASSAULT : I_SLEDGE;
+            e.inv.Add(e.weapon);
+            if (e.weapon == I_ASSAULT) e.inv.Add(I_AMMO_556, gen.irange(10, 30));
+        }
         Entity& b = Spawn(EK_MUTANT, ZONE_WASTE, mx, mz - 3, 0);
-        b.name = "Grande Mutante";
-        b.photoKey = "bigmutant";
+        b.name = "Mutante Bruto";
+        b.maxHp = b.hp = 420;
+        b.dr = 18;
         b.scale = 1.55f;
-        b.wanderRadius = 2;
+        b.xp = 120;
+        b.weapon = I_MINIGUN;
+        b.inv.Add(I_MINIGUN);
+        b.inv.Add(I_AMMO_5MM, 120);
+        b.inv.Add(I_CAPS, 80);
     }
     // auto, pali e lampioni lungo le strade
     for (int i = 0; i < 12; i++) {
@@ -1775,12 +1685,13 @@ void BuildWasteland() {
     Group(EK_DOG, -80, -60, 2);
     Group(EK_DOG, 120, 290, 3);
     Group(EK_GHOUL, 40, -140, 2);
-    // piccoli accampamenti di Teschi lungo le strade
-    for (Vector3 p : {V3(130, 0, -30), V3(134, 0, -26), V3(128, 0, -24), V3(-118, 0, 60), V3(-122, 0, 64), V3(170, 0, 140), V3(174, 0, 142)}) {
-        Entity& e = Raider(p.x, p.z);
-        e.dlg = "raider";
-        e.territory = 24;
-    }
+    Raider(130, -30, I_PISTOL);
+    Raider(134, -26, I_PIPE);
+    Raider(128, -24, I_HUNTRIFLE);
+    Raider(-118, 60, I_SHOTGUN);
+    Raider(-122, 64, I_PISTOL);
+    Raider(170, 140, I_PISTOL);
+    Raider(174, 142, I_BAT);
 }
 
 // ---------------------------------------------------------------------------
@@ -1916,6 +1827,7 @@ void BuildVault() {
     {
         Entity& e = NPC(ZONE_VAULT, 4, -18, PI, "Agente Russo", "vault_guard", OF_GUARD, false, FAC_VAULT);
         e.look.hat = 2;
+        e.weapon = I_PISTOL;
         e.wanderRadius = 1.5f;
         e.essential = true;
     }
@@ -1966,13 +1878,13 @@ void BuildBaseInterior() {
     // snodo centrale
     Room(-12, 30, 12, 50, 5, WS_BUNKER, wall, floor, ceil, {{SIDE_N, 12, 4, 3.5f}, {SIDE_S, 12, 4, 3.5f}, {SIDE_W, 10, 3, 3}, {SIDE_E, 10, 3, 3}}, 0, lamp, 8, 0.5f);
     AddSign(V3(-11.75f, 3.8f, 40), PI / 2, 3.5f, 0.7f, "CASERMA", Col(60, 66, 60), Col(220, 220, 200));
-    AddSign(V3(11.75f, 3.8f, 40), -PI / 2, 3.5f, 0.7f, "MAGAZZINO", Col(60, 66, 60), Col(220, 180, 60));
+    AddSign(V3(11.75f, 3.8f, 40), -PI / 2, 3.5f, 0.7f, "ARMERIA", Col(60, 66, 60), Col(220, 60, 40));
     AddSign(V3(0, 4.0f, 49.75f), PI, 4.5f, 0.8f, "LABORATORIO", Col(60, 66, 60), Col(120, 220, 255));
     Solid(V3(6, 0.45f, 34), V3(3, 0.9f, 1.2f), C_METAL_D, true);
     {
-        Interactable& t = AddInter(INT_TERMINAL, ZONE_BASE, V3(6, 1.15f, 34.7f), 0, "Terminale di sicurezza interno", "sec_term_in");
-        t.terminal = TERM_SECURITY;
-        t.hackLevel = 2;
+        Interactable& t = AddInter(INT_TERMINAL, ZONE_BASE, V3(6, 1.15f, 34.7f), 0, "Terminale di sicurezza", "armory_term");
+        t.terminal = TERM_ARMORY;
+        t.hackLevel = 3;
         t.size = V3(0.5f, 0.5f, 0.5f);
     }
     Cont(ZONE_BASE, -6, 33, 0, CM_DESK, 2);
@@ -1981,33 +1893,29 @@ void BuildBaseInterior() {
     Room(-32, 32, -12, 48, 3.5f, WS_BUNKER, wall, floor, ceil, {}, 1 << SIDE_E, lamp, 7, 0.5f);
     for (int i = 0; i < 4; i++) {
         Solid(V3(-29 + i * 4.5f, 0.4f, 46.5f), V3(1.1f, 0.5f, 2.2f), Col(90, 100, 80));
-        Interactable& l = Cont(ZONE_BASE, -29 + i * 4.5f, 33.0f, 0, CM_LOCKER, 3, i == 1 ? 2 : 0);
-        if (i == 1) {
-            l.tag = "maint_locker";
-            l.inv.Add(I_MAINTCODE);
-        }
+        Cont(ZONE_BASE, -29 + i * 4.5f, 33.0f, 0, CM_LOCKER, 3, i == 1 ? 2 : 0);
     }
     Cont(ZONE_BASE, -31, 40, PI / 2, CM_FOOTLOCKER, 3, 3);
-    // magazzino
+    // armeria
     Room(12, 34, 26, 46, 3.5f, WS_BUNKER, wall, floor, ceil, {}, 1 << SIDE_W, Col(255, 220, 170), 6);
     {
-        Interactable& d = AddInter(INT_DOOR, ZONE_BASE, V3(12, 1.5f, 40), PI / 2, "Porta del magazzino", "storage_door");
+        Interactable& d = AddInter(INT_DOOR, ZONE_BASE, V3(12, 1.5f, 40), PI / 2, "Porta dell'armeria", "armory_door");
         d.lock = 4;
         d.locked = true;
         d.size = V3(3, 3, 0.3f);
         d.collider = Z->AddCollider(V3(11.6f, 0, 38.4f), V3(12.4f, 3.1f, 41.6f), true);
     }
     {
-        Interactable& c = Cont(ZONE_BASE, 24.5f, 40, -PI / 2, CM_LOCKER, 3, 0, "exosuit");
-        c.name = "Rastrelliera degli esoscheletri";
+        Interactable& c = Cont(ZONE_BASE, 24.5f, 40, -PI / 2, CM_LOCKER, 3, 0, "power_armor");
+        c.name = "Rastrelliera armature";
         c.inv.Clear();
-        c.inv.Add(I_EXOSUIT);
+        c.inv.Add(I_POWER);
     }
     Cont(ZONE_BASE, 20, 45, PI, CM_LOCKER, 3);
     {
         Interactable& c = Cont(ZONE_BASE, 16, 45, PI, CM_LOCKER, 3);
-        c.inv.Add(I_STEALTHBOY, 2);
-        c.inv.Add(I_REPAIRKIT);
+        c.inv.Add(I_PLASMA);
+        c.inv.Add(I_AMMO_MFC, 40);
     }
     Cont(ZONE_BASE, 20, 35, 0, CM_AMMOBOX, 3);
     Cont(ZONE_BASE, 23, 35, 0, CM_AMMOBOX, 3);
@@ -2029,8 +1937,6 @@ void BuildBaseInterior() {
     {
         Interactable& t = AddInter(INT_TERMINAL, ZONE_BASE, V3(-10.8f, 1.2f, 75.5f), PI / 2, "Terminale del laboratorio", "lab_term");
         t.terminal = TERM_LAB;
-        t.hackLevel = 3;
-        t.keyItem = I_MAINTCODE;
         t.size = V3(0.5f, 0.5f, 0.5f);
         Solid(V3(-11.3f, 0.5f, 75.5f), V3(1.0f, 1.0f, 1.4f), C_METAL_D, true);
     }
@@ -2041,34 +1947,36 @@ void BuildBaseInterior() {
     Cont(ZONE_BASE, 11.4f, 78, -PI / 2, CM_FIRSTAID, 2);
     W.zones[ZONE_BASE].Finalize();
 
-    // sorveglianza automatica: telecamere e sentinelle (scortano fuori gli intrusi)
-    Spawn(EK_CAMERA, ZONE_BASE, 0.8f, 24, PI);
+    // difese automatiche
+    Spawn(EK_TURRET, ZONE_BASE, 0.8f, 24, PI);
     Spawn(EK_ROBOT, ZONE_BASE, -6, 40, 0).patrol = {V3(-8, 0, 36), V3(8, 0, 36), V3(8, 0, 46), V3(-8, 0, 46)};
     Spawn(EK_ROBOT, ZONE_BASE, -24, 40, PI / 2);
-    Spawn(EK_CAMERA, ZONE_BASE, -30, 45, PI / 2);
+    Spawn(EK_TURRET, ZONE_BASE, -30, 45, PI / 2);
     Spawn(EK_ROBOT, ZONE_BASE, 6, 62, PI);
     {
         Entity& e = Spawn(EK_ROBOT, ZONE_BASE, 0, 70, PI);
         e.name = "Sentinella Mk.V";
         e.tag = "mk5";
-        e.photoKey = "mk5";
+        e.maxHp = e.hp = 520;
+        e.dr = 30;
         e.scale = 1.6f;
-        e.speed = 3.2f;
-        e.detect = 24;
-        e.territory = 14;
-        e.patrol = {V3(-4.5f, 0, 70.5f), V3(4.5f, 0, 70.5f), V3(4.5f, 0, 77.5f), V3(-4.5f, 0, 77.5f)};
+        e.xp = 220;
+        e.accuracy = 0.6f;
+        e.inv.Add(I_AMMO_MFC, 30);
+        e.inv.Add(I_CIRCUIT, 2);
+        e.inv.Add(I_FUSE, 2);
     }
 }
 
 void BuildVendors() {
     Vendor gus{"Emporio di Gus", {}, 650};
-    int gi[][2] = {{I_BAIT, 6}, {I_NOISE, 8}, {I_JACKET, 1}, {I_DARKCLOAK, 1}, {I_COAT, 1}, {I_REPAIRKIT, 3}, {I_PARTS, 6}, {I_BOBBYPIN, 12}, {I_STEALTHBOY, 1}, {I_MEDKIT, 2}, {I_SCRAP, 3}, {I_CLOCK, 1}, {I_COMIC, 2}};
+    int gi[][2] = {{I_PISTOL, 2}, {I_HUNTRIFLE, 1}, {I_SHOTGUN, 1}, {I_KNIFE, 1}, {I_BAT, 1}, {I_ASSAULT, 1}, {I_LEATHER, 1}, {I_METAL, 1}, {I_AMMO_10, 120}, {I_AMMO_308, 40}, {I_AMMO_SHELL, 40}, {I_AMMO_556, 60}, {I_AMMO_CELL, 40}, {I_GRENADE, 5}, {I_BOBBYPIN, 12}, {I_STIMPAK, 2}, {I_SCRAP, 3}};
     for (auto& p : gi) gus.inv.Add(p[0], p[1]);
     Vendor rosi{"Clinica di Ferrocittà", {}, 400};
-    int ri[][2] = {{I_MEDKIT, 8}, {I_RADAWAY, 5}, {I_RADX, 4}, {I_PUREWATER, 5}, {I_HERBTEA, 4}};
+    int ri[][2] = {{I_STIMPAK, 10}, {I_RADAWAY, 5}, {I_RADX, 4}, {I_PUREWATER, 5}, {I_MENTATS, 3}};
     for (auto& p : ri) rosi.inv.Add(p[0], p[1]);
     Vendor tano{"Bar di Tano", {}, 300};
-    int ti[][2] = {{I_COLA, 12}, {I_BEANS, 6}, {I_CRAM, 4}, {I_MEAT, 6}, {I_WATER, 8}, {I_PUREWATER, 4}, {I_COFFEE, 4}};
+    int ti[][2] = {{I_COLA, 12}, {I_BEANS, 6}, {I_CRAM, 4}, {I_MEAT, 4}, {I_WATER, 8}, {I_PUREWATER, 4}, {I_JET, 3}};
     for (auto& p : ti) tano.inv.Add(p[0], p[1]);
     gVendorTemplates = {gus, rosi, tano};
 }
@@ -2105,7 +2013,6 @@ void WorldBuild() {
     GenMapTexture();
     BuildVendors();
     InitTerminals();
-    InitPhotoSubjects();
     for (int i = 0; i < (int)gEntTemplates.size(); i++) gEntTemplates[i].id = i;
 }
 

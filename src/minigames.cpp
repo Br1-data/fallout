@@ -1,6 +1,5 @@
 // Minigiochi: scasso delle serrature e violazione dei terminali.
 #include "game.h"
-#include "platform.h"
 
 // ---------------------------------------------------------------------------
 //  Scasso
@@ -247,10 +246,6 @@ void TerminalStart(int inter) {
         PlaySfx(SFX_TERM_FAIL);
         return;
     }
-    if (it.hackLevel > 0 && !it.hacked && it.keyItem >= 0 && G.player.inv.Count(it.keyItem) > 0) {
-        it.hacked = true;
-        Notify(Fmt("Accesso con: %s", ITEMS[it.keyItem].name));
-    }
     if (it.hackLevel > 0 && !it.hacked) {
         int req = HACK_REQ[Clamp(it.hackLevel, 0, 3)];
         if (SkillValue(SK_SCIENCE) < req) {
@@ -265,31 +260,21 @@ void TerminalStart(int inter) {
     SetGameState(GS_TERMINAL);
 }
 
-void TerminalAction(const std::string& a, Interactable& term) {
+static void RunAction(const std::string& a) {
     if (a == "open_gate") {
         G.flags["gate_hacked"] = 1;
         Interactable* g = FindInterByTag("base_gate");
         if (g && !g->open) Interact((int)(g - &G.inters[0]));
-    } else if (a == "security_off") {
-        SecurityOff(term.zone, false);
-    } else if (a == "unlock_storage") {
-        Interactable* d = FindInterByTag("storage_door");
-        if (d) d->locked = false;
-        Notify("Il magazzino dei laboratori è sbloccato.");
+    } else if (a == "unlock_armory") {
+        Interactable* d = FindInterByTag("armory_door");
+        if (d) {
+            d->locked = false;
+            if (!d->open) Interact((int)(d - &G.inters[0]));
+        }
     } else if (a == "unlock_safe") {
         Interactable* s = FindInterByTag("boss_safe");
         if (s) s->locked = false;
         Notify("La cassaforte è sbloccata.");
-    } else if (a == "mk5_off") {
-        Entity* m = FindEntityByTag("mk5");
-        if (m && !m->off) {
-            m->off = true;
-            m->aware = false;
-            m->ai = AI_IDLE;
-            G.flags["mk5_off"] = 1;
-            PlaySfx(SFX_ROBOT, 0.8f, 0.5f);
-            Notify("La Sentinella Mk.V si spegne con un lungo sospiro meccanico.", Col(150, 255, 200));
-        }
     }
 }
 
@@ -422,7 +407,7 @@ void TerminalUpdate(float dt) {
         TM.reading = TM.sel;
         TM.mode = 2;
         TM.typeT = 0;
-        if (!T.entries[TM.sel].action.empty()) TerminalAction(T.entries[TM.sel].action, G.inters[TM.inter]);
+        if (!T.entries[TM.sel].action.empty()) RunAction(T.entries[TM.sel].action);
     }
 }
 
