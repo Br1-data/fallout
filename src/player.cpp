@@ -255,12 +255,15 @@ void FireBlaster() {
     Vector3 impact = origin + direction * distance;
     if (!LaserMissionHit(origin, direction, distance, impact) && hitEntity) {
         Entity& e = G.ents[entityHit.entity];
-        if (e.hostile && !e.off && (e.kind == EK_ROBOT || e.kind == EK_CAMERA)) {
+        if (!e.off) {
             e.stunT = 6;
+            e.vel = V3(0, 0, 0);
+            e.moveAmt = 0;
             e.aware = false;
             e.alert = 0;
-            e.ai = AI_RETURN;
-            Notify(e.name + ": sovraccarico per 6 secondi!", Col(110, 235, 255));
+            if (!e.companion) e.ai = AI_RETURN;
+            bool machine = e.kind == EK_ROBOT || e.kind == EK_CAMERA;
+            Notify(e.name + (machine ? ": sovraccarico per 6 secondi!" : ": stordito per 6 secondi!"), Col(110, 235, 255));
         }
     }
     Vector3 right = Vector3Normalize(Vector3CrossProduct(direction, V3(0, 1, 0)));
@@ -437,7 +440,7 @@ static void FindInteraction() {
     float best = 0.38f;
     for (int i = 0; i < (int)G.ents.size(); i++) {
         Entity& e = G.ents[i];
-        if (e.zone != P.zone || e.hostile || e.dlg.empty()) continue;
+        if (e.zone != P.zone || e.hostile || e.stunT > 0 || e.dlg.empty()) continue;
         Vector3 c = EntityCenter(e);
         Vector3 to = c - eye;
         float d = Vector3Length(to);

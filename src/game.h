@@ -395,7 +395,7 @@ struct Entity {
     Vector3 lastSeen{};
     Vector3 distractPos{};
     float distractT = 0;
-    float stunT = 0;          // sovraccarico temporaneo da impulso laser
+    float stunT = 0;          // stordimento temporaneo da impulso laser (persone, creature e macchine)
     float losTimer = 0;
     bool los = false;
     float strafe = 1;

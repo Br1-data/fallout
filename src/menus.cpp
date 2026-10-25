@@ -102,7 +102,7 @@ void MenuDraw() {
     const char* hint = sMenuSel < (int)items.size() && items[sMenuSel].act == MA_OPENWORLD ? "Parti subito da Ferrocittà ed esplora liberamente: è qui che si incontrano gli altri giocatori."
                        : sMenuSel < (int)items.size() && items[sMenuSel].act == MA_STORY ? "La storia completa: si comincia dentro il Rifugio 33, dal Sovrintendente." : "";
     UIText(hint, Wd / 2, 655, 16, ColAlpha(Col(230, 200, 150), 0.75f), 1);
-    UIText(DUSTFALL_WEB ? "v2.1 web  -  Un'avventura post-apocalittica senza violenza, anche in compagnia" : "v2.1  -  Un'avventura post-apocalittica senza violenza", 20, 690, 15, ColAlpha(Col(230, 200, 150), 0.6f));
+    UIText(DUSTFALL_WEB ? "v2.1 web  -  Avventura e combattimenti non letali, anche in compagnia" : "v2.1  -  Avventura post-apocalittica e combattimenti non letali", 20, 690, 15, ColAlpha(Col(230, 200, 150), 0.6f));
     UIText("Frecce/Mouse + INVIO", Wd - 20, 690, 15, ColAlpha(Col(230, 200, 150), 0.6f), 2);
 }
 

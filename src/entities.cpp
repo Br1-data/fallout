@@ -120,10 +120,10 @@ Entity* FindEntityByTag(const std::string& tag) {
 }
 
 const char* EntityState(const Entity& e) {
+    if (e.off) return "Spento";
+    if (e.stunT > 0) return e.kind == EK_ROBOT || e.kind == EK_CAMERA ? "In sovraccarico" : "Stordito";
     if (e.companion) return "Ti segue";
     if (!e.hostile) return "Tranquillo";
-    if (e.off) return "Spento";
-    if (e.stunT > 0) return "In sovraccarico";
     if (e.asleep) return "Dorme";
     if (e.ai == AI_DISTRACT) return "Distratto dall'esca";
     if (e.ai == AI_SEARCH) return "Indaga su un rumore";
@@ -133,6 +133,7 @@ const char* EntityState(const Entity& e) {
 }
 
 const char* EntityHint(const Entity& e) {
+    if (e.stunT > 0 && !e.off) return "Fuori combattimento: si riprende tra pochi secondi.";
     switch (e.kind) {
         case EK_ROACH: return "Veloce ma miope. Le esche lo distraggono.";
         case EK_MOLERAT: return "Difende la tana. Un'esca lo tiene occupato.";
@@ -993,6 +994,13 @@ void DrawEntity(const Entity& e) {
             if (e.kind == EK_GHOUL) hold = 0.35f; // braccia protese da sonnambulo
             DrawHumanoid(e.pos, e.yaw, look, e.anim, e.moveAmt, hold, 0, 0, TOOL_HANDS, 0, e.scale, e.glow, 0);
             break;
+        }
+    }
+    if (e.stunT > 0 && !e.off) {
+        for (int i = 0; i < 3; i++) {
+            float angle = G.time * 3 + i * (2 * PI / 3);
+            Vector3 spark = e.pos + V3(cosf(angle) * 0.32f, EntityHeight(e) + 0.18f + sinf(angle * 2) * 0.06f, sinf(angle) * 0.32f);
+            P(PR_SPHERE, MatrixIdentity(), spark, V3(0.09f, 0.09f, 0.09f), Col(110, 235, 255), 1);
         }
     }
 }

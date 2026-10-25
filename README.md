@@ -1,7 +1,7 @@
 # DUSTFALL — Cronache delle Terre Bruciate
 
 Avventura **3D open world in prima/terza persona**, ambientata in un mondo post-apocalittico in
-stile *Fallout* — ma **senza violenza**: nessuno muore. Un abitante di un Rifugio antiatomico
+stile *Fallout*, con **scontri e combattimenti non letali**: il blaster stordisce, nessuno muore. Un abitante di un Rifugio antiatomico
 esce per la prima volta nelle Terre Bruciate con una fotocamera, un blaster di soccorso,
 un po' di astuzia e tanta curiosità.
 
@@ -63,8 +63,11 @@ La sfida funziona anche con `?rete=locale`, mentre con `?rete=off` è disattivat
 
 Quando inizi a esplorare le Terre Bruciate ricevi un **blaster di soccorso**: premi **5** per
 equipaggiarlo e fai clic per sparare raggi ciano, con lampi, scintille e suono spaziale.
-Ogni colpo consuma **8 PA**, che si ricaricano normalmente. Un colpo su una sentinella o
-telecamera ostile la mette in sovraccarico per **6 secondi**; non ferisce persone o creature.
+Ogni colpo consuma **8 PA**, che si ricaricano normalmente. Puoi colpire **nemici, persone e
+creature**, anche i personaggi amichevoli: rimangono **storditi per 6 secondi** e poi si riprendono.
+Sentinelle e telecamere subiscono un sovraccarico temporaneo. Chi e' stordito non può muoversi,
+inseguirti o parlare: sfrutta la pausa per passare oppure attendi per continuare il dialogo.
+I personaggi delle missioni e i compagni restano in vita e riprendono le proprie attività.
 I tuoi amici vedono il blaster e i suoi raggi.
 Sul telefono selezionalo con **ATTREZZO** e spara con **USA**.
 
@@ -101,14 +104,16 @@ torre radio e un cane che ha perso la strada di casa.
 
 Il finale cambia in base a come hai risolto le missioni e al tuo karma.
 
-## Senza violenza, ma avventuroso
+## Scontri nelle Terre Bruciate
 
-Le creature e i guardiani delle Terre Bruciate non feriscono: se ti scoprono ti inseguono e, se ti
+Le creature e i guardiani delle Terre Bruciate ti inseguono se ti scoprono e, se ti
 raggiungono, ti **scacciano dal loro territorio** (e i Teschi ti alleggeriscono di qualche tappo).
-Per andare avanti devi osservare, nasconderti, distrarre, convincere e riparare:
+Puoi affrontarli con il blaster oppure osservare, nasconderti, distrarre, convincere e riparare:
 
 - **Fotocamera** — fotografa creature e luoghi notevoli per il catalogo delle Terre Bruciate
   (22 soggetti, ognuno con la sua ricompensa in esperienza). Clic destro per lo zoom.
+- **Blaster a impulsi** — mette fuori combattimento persone, nemici e creature per 6 secondi,
+  senza ucciderli. I riflessi ciano sopra la testa segnalano chi e' stordito.
 - **Furtività** — accovacciati, muoviti al buio, evita i coni di luce delle telecamere. Correre e
   saltare fa rumore; l'indicatore in alto ti dice quando qualcuno è sospettoso.
 - **Esche di carne** — attirano animali e bestie, che si fermano a mangiare.

@@ -507,7 +507,7 @@ static void DrawAllScreens() {
 }
 
 static int RunSelfTest() {
-    printf("=== SELF-TEST DUSTFALL (avventura senza violenza) ===\n");
+    printf("=== SELF-TEST DUSTFALL (combattimento non letale) ===\n");
     NewGame();
     Player& P = G.player;
     const float SAFE = 99999;
@@ -896,6 +896,83 @@ static int RunSelfTest() {
     Check(G.ents.back().stunT == 6 && !G.ents.back().off, "il blaster sovraccarica la sentinella senza spegnerla definitivamente");
     EntitiesUpdate(6.1f);
     Check(G.ents.back().stunT == 0, "la sentinella recupera dopo il sovraccarico");
+    // Persone, nemici e creature mantengono identita', missioni e alleanze dopo lo stordimento.
+    struct StunCase { EntKind kind; bool hostile, companion, asleep, off; const char* label; };
+    const StunCase stunCases[] = {
+        {EK_HUMAN, false, false, false, false, "persona amichevole"},
+        {EK_HUMAN, true, false, false, false, "nemico umano"},
+        {EK_DEATHCLAW, true, false, true, false, "creatura addormentata"},
+        {EK_DOG, false, true, false, false, "compagno animale"},
+        {EK_ROBOT, true, false, false, true, "robot gia' spento"}
+    };
+    for (const auto& c : stunCases) {
+        Entity target;
+        target.id = (int)G.ents.size();
+        target.kind = c.kind;
+        target.hostile = c.hostile;
+        target.companion = c.companion;
+        target.asleep = c.asleep;
+        target.off = c.off;
+        target.essential = true;
+        target.name = c.label;
+        target.tag = "stun_test";
+        target.dlg = c.kind == EK_HUMAN ? "sheriff" : "";
+        target.pos = target.home = V3(30, TerrainHeight(30, 70) + 20, 70);
+        target.vel = V3(1, 0, 1);
+        target.aware = true;
+        target.alert = 1;
+        G.ents.push_back(target);
+        Entity& hit = G.ents.back();
+        Vector3 center = EntityCenter(hit);
+        G.cam.position = center + V3(0, 0, 5);
+        G.cam.target = center;
+        P.useCd = 0;
+        P.ap = 100;
+        FireBlaster();
+        if (c.off) {
+            Check(hit.stunT == 0 && hit.off, "un robot gia' spento non viene riattivato dal blaster");
+        } else {
+            Check(hit.stunT == 6 && !hit.aware && hit.alert == 0,
+                  Fmt("il blaster stordisce per 6 secondi: %s", c.label).c_str());
+            Check(std::string(EntityState(hit)) == (c.kind == EK_ROBOT || c.kind == EK_CAMERA ? "In sovraccarico" : "Stordito"),
+                  Fmt("lo scanner riconosce lo stordimento: %s", c.label).c_str());
+            Vector3 frozen = hit.pos;
+            EntitiesUpdate(0.5f);
+            Check(hit.stunT > 5 && Vector3Distance(hit.pos, frozen) < 0.001f && Vector3Length(hit.vel) == 0,
+                  Fmt("il bersaglio resta fermo durante lo stordimento: %s", c.label).c_str());
+            EntitiesUpdate(5.6f);
+            Check(hit.stunT == 0 && hit.hostile == c.hostile && hit.companion == c.companion &&
+                  hit.asleep == c.asleep && !hit.off && hit.essential && hit.tag == "stun_test" &&
+                  hit.dlg == target.dlg,
+                  Fmt("il bersaglio recupera conservando ruolo e alleanze: %s", c.label).c_str());
+        }
+        G.ents.pop_back();
+    }
+    int sheriff = FindNpc("sheriff");
+    Check(sheriff >= 0, "personaggio della missione presente dopo gli scontri non letali");
+    if (sheriff >= 0) {
+        Entity& npc = G.ents[sheriff];
+        Vector3 originalPos = npc.pos, originalHome = npc.home;
+        npc.pos = npc.home = V3(30, TerrainHeight(30, 70) + 20, 70);
+        Vector3 center = EntityCenter(npc);
+        G.cam.position = center + V3(0, 0, 5);
+        G.cam.target = center;
+        P.useCd = 0;
+        P.ap = 100;
+        int mainStage = QUESTS[Q_MAIN].stage;
+        FireBlaster();
+        SetGameState(GS_PLAY);
+        DialogueStart(sheriff);
+        Check(npc.stunT > 0 && G.state == GS_PLAY && QUESTS[Q_MAIN].stage == mainStage,
+              "un personaggio stordito non parla e la missione resta disponibile");
+        EntitiesUpdate(6.1f);
+        DialogueStart(sheriff);
+        Check(npc.stunT == 0 && G.state == GS_DIALOGUE && G.dlg.npc == sheriff && !G.dlg.opts.empty(),
+              "dopo il recupero il personaggio riprende il dialogo della missione");
+        SetGameState(GS_PLAY);
+        npc.pos = originalPos;
+        npc.home = originalHome;
+    }
     LaserMissionUpdate(0.1f);
     DrawFrame();
     printf("=== %s (%d errori) ===\n", sFail ? "FALLITO" : "SUPERATO", sFail);

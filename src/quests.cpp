@@ -1027,6 +1027,10 @@ void DlgGuard(int) {
 } // namespace
 
 void DialogueStart(int npc) {
+    if (G.ents[npc].stunT > 0) {
+        Notify(G.ents[npc].name + " e' stordito. Attendi che si riprenda.", Col(110, 235, 255));
+        return;
+    }
     G.dlg = Dialogue();
     G.dlg.npc = npc;
     G.dlg.node = 0;

@@ -283,13 +283,14 @@ void HudDraw() {
     {
         RayHit eh;
         Vector3 f = Vector3Normalize(G.cam.target - G.cam.position);
-        if (RaycastEntities(P.zone, G.cam.position, f, zoom ? 150.0f : 60.0f, eh)) {
+        if (RaycastEntities(P.zone, G.cam.position, f, zoom ? 150.0f : (P.tool == TOOL_BLASTER ? 95.0f : 60.0f), eh)) {
             Entity& e = G.ents[eh.entity];
             RayHit wh;
-            if (!RaycastWorld(P.zone, G.cam.position, f, eh.t, wh) && (e.hostile || zoom)) {
-                Color ec = e.ai == AI_CHASE ? Col(255, 110, 80) : (e.hostile && !e.off && !e.asleep ? Col(255, 220, 110) : PIP);
+            if (!RaycastWorld(P.zone, G.cam.position, f, eh.t, wh) && (e.hostile || zoom || P.tool == TOOL_BLASTER || e.stunT > 0)) {
+                Color ec = e.stunT > 0 ? Col(110, 235, 255) : (e.ai == AI_CHASE ? Col(255, 110, 80) : (e.hostile && !e.off && !e.asleep ? Col(255, 220, 110) : PIP));
                 UIText(e.name, Wd / 2, 40, 20, ec, 1);
                 std::string st = EntityState(e);
+                if (e.stunT > 0 && !e.off) st += Fmt("  %.1f s", e.stunT);
                 if (zoom && !e.photoKey.empty()) st += HasPhoto(e.photoKey) ? "   [già fotografato]" : "   [nuovo soggetto!]";
                 UIText(st, Wd / 2, 64, 16, ColAlpha(ec, 0.85f), 1);
             }
