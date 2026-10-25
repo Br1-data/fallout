@@ -531,23 +531,19 @@ void EndingStart() {
     else if (deal == 2)
         sEndSlides.push_back("Con un bel mucchio di tappi in tasca, Teschio si comprò una radio nuova. I Teschi restarono rumorosi e territoriali, ma Ferrocittà imparò a conviverci.");
     else
-        sEndSlides.push_back("Teschio non scoprì mai chi gli avesse soffiato la tessera da sotto il naso. I Teschi restarono nel loro covo, gelosi dei loro rottami: nessuno si fece male, e nelle Terre Bruciate è già una buona notizia.");
+        sEndSlides.push_back("Teschio e i suoi restarono padroni del covo, gelosi dei loro rottami. Ma nelle Terre Bruciate si seppe che un abitante dei Rifugi aveva superato i predoni e raggiunto i laboratori della Base Delta-9.");
     if (QUESTS[Q_MEDS].done)
         sEndSlides.push_back("Grazie alle medicine recuperate, la clinica della dottoressa Rosi salvò decine di vite durante l'inverno delle febbri.");
     else
         sEndSlides.push_back("Senza medicine, l'inverno delle febbri fu duro per Ferrocittà. La dottoressa Rosi lavorò giorno e notte, con quel poco che aveva.");
-    if (QUESTS[Q_WATER].done)
-        sEndSlides.push_back("La pompa riparata diede acqua limpida a Ferrocittà per molti anni. Sotto la torre dell'acqua nacque un piccolo orto, il primo verde che la città avesse mai visto.");
     if (QUESTS[Q_BEAST].done)
-        sEndSlides.push_back("La fotografia dello Squarciatore fece il giro delle Terre Bruciate. Jack Falco la appese sopra il bancone di Tano, e da allora nessuno ha più voluto dare la caccia alla bestia: dorme ancora, indisturbata, nella sua gola.");
+        sEndSlides.push_back("L'artiglio dello Squarciatore divenne il trofeo più discusso di Ferrocittà. Jack Falco raccontò a tutti di come il Rifugiato avesse affrontato la bestia e l'avesse messa fuori combattimento. La leggenda sopravvisse allo scontro.");
     else
         sEndSlides.push_back("Lo Squarciatore continuò a dormire nella gola a nord-ovest. Di notte il suo russare si sentiva fino alle mura di Ferrocittà, e i bambini giuravano che fosse un tuono.");
-    if (QUESTS[Q_DOG].done)
-        sEndSlides.push_back("Ruggine non lasciò mai più il fianco di " + P.name + ". Rita, ogni volta che li vede arrivare a Ferrocittà, ha sempre pronta una striscia di carne secca.");
     if (P.karma >= 50)
-        sEndSlides.push_back("E " + P.name + "? Nelle Terre Bruciate si raccontano ancora storie del Rifugiato che portò la luce sotto la montagna e la speranza in superficie, senza mai alzare le mani su nessuno.");
+        sEndSlides.push_back("E " + P.name + "? Nelle Terre Bruciate si raccontano ancora storie del Rifugiato che affrontò predoni e sentinelle, portò la luce sotto la montagna e lasciò una speranza in superficie.");
     else
-        sEndSlides.push_back("E " + P.name + "? Salvato il Rifugio, il Rifugiato tornò a guardare l'orizzonte arancione con la fotocamera al collo. Le Terre Bruciate avevano ancora molte storie da raccontare.");
+        sEndSlides.push_back("E " + P.name + "? Salvato il Rifugio, il Rifugiato tornò a guardare l'orizzonte arancione con il blaster al fianco. Le Terre Bruciate avevano ancora molte storie da raccontare.");
     G.endingSlide = 0;
     G.endingT = 0;
     SetGameState(GS_ENDING);

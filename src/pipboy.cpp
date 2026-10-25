@@ -174,7 +174,12 @@ void PipBoyUpdate() {
     int count = 0;
     if (G.pipTab == 0) count = G.pipSub == 1 ? ST_COUNT : (G.pipSub == 2 ? SK_COUNT : (G.pipSub == 3 ? PK_COUNT : 0));
     else if (G.pipTab == 1) count = (int)InvList(G.pipSub).size();
-    else if (G.pipTab == 2) count = G.pipSub == 0 ? Q_COUNT + (G.flags.count("lucciola_started") ? 1 : 0) : (G.pipSub == 1 ? (int)W.locations.size() : (int)PHOTO_SUBJECTS.size());
+    else if (G.pipTab == 2) {
+        if (G.pipSub == 0) {
+            for (int q = 0; q < CAMPAIGN_QUEST_COUNT; q++)
+                count += QUESTS[q].stage > 0 || QUESTS[q].done;
+        } else count = G.pipSub == 1 ? (int)W.locations.size() : (int)PHOTO_SUBJECTS.size();
+    }
     else if (G.pipTab == 4) count = 3;
     float wheel = GetMouseWheelMove();
     if ((IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN) || wheel < -0.5f) && count > 0) { G.pipSel = (G.pipSel + 1) % count; PlaySfx(SFX_UI_MOVE, 0.5f); }
@@ -407,32 +412,19 @@ void PipBoyDraw() {
     } else if (G.pipTab == 2) {
         if (G.pipSub == 0) {
             std::vector<int> order;
-            if (G.flags.count("lucciola_started")) order.push_back(-1);
-            for (int q = 0; q < Q_COUNT; q++)
+            for (int q = 0; q < CAMPAIGN_QUEST_COUNT; q++)
                 if (QUESTS[q].stage > 0 && !QUESTS[q].done) order.push_back(q);
-            for (int q = 0; q < Q_COUNT; q++)
+            for (int q = 0; q < CAMPAIGN_QUEST_COUNT; q++)
                 if (QUESTS[q].done) order.push_back(q);
             if (order.empty()) UIText("Nessuna missione.", lx, ly, 20, PIP_DIM);
             if (G.pipSel >= (int)order.size()) G.pipSel = std::max(0, (int)order.size() - 1);
             for (int i = 0; i < (int)order.size(); i++) {
                 int q = order[i];
-                bool completed = q < 0 ? G.flags["lucciola_done"] != 0 : QUESTS[q].done;
-                ListRow(i, std::string(q < 0 ? "SOS Lucciola" : QUESTS[q].title) + (completed ? "  [COMPLETATA]" : ""), "", !completed);
+                bool completed = QUESTS[q].done;
+                ListRow(i, std::string(QUESTS[q].title) + (completed ? "  [COMPLETATA]" : ""), "", !completed);
             }
             if (!order.empty()) {
                 int q = order[G.pipSel];
-                if (q < 0) {
-                    Desc("SOS Lucciola", "Un piccolo drone e' disperso. Usa il blaster (5) per riattivare i tre ripetitori ciano sulla mappa. Gli amici nella stanza possono aiutarti!");
-                    float y = ly + 200;
-                    const char* names[] = {"Cancello di Ferrocitta", "Stazione Atomo", "Fattoria abbandonata"};
-                    for (int i = 0; i < 3; i++) {
-                        bool active = G.flags["lucciola_relay" + std::to_string(i)] != 0;
-                        UIText(std::string(active ? "[OK] " : "[  ] ") + names[i], rx, y, 18, active ? PIP_DIM : PIP);
-                        y += 26;
-                    }
-                    UIText(G.flags["lucciola_done"] ? "Lucciola e' salva e ti accompagna!" : "Poi recupera il drone alla Torre Radio (E).", rx, y + 10, 17, PIP);
-                    UIText("Ricompensa: 200 PE e 150 tappi.", rx, y + 38, 17, PIP_DIM);
-                } else {
                 Desc(QUESTS[q].title, QuestDescription(q));
                 float y = ly + 200;
                 if (!QUESTS[q].done) {
@@ -443,7 +435,6 @@ void PipBoyDraw() {
                         y += 6;
                     }
                 } else UIText("Completata.", rx, y, 20, PIP_DIM);
-                }
             }
         } else if (G.pipSub == 1) {
             int k = 0;
@@ -501,7 +492,7 @@ void PipBoyDraw() {
             UIText(l.name, p.x + 10, p.y - 9, 15, PIP);
             if (hv) hover = l.name;
         }
-        for (int q = 0; q < Q_COUNT; q++) {
+        for (int q = 0; q < CAMPAIGN_QUEST_COUNT; q++) {
             if (QUESTS[q].stage == 0 || QUESTS[q].done) continue;
             auto objs = QuestObjectives(q);
             for (auto& o : objs) {
@@ -522,7 +513,6 @@ void PipBoyDraw() {
             DrawTriangle(a, b, c, Color{230, 255, 230, 255});
         }
         NetMapDraw(M, hover);
-        LaserMissionMapDraw(M, hover);
         float ix = mx + ms + 30;
         UIText("TERRE BRUCIATE", ix, my, 24, PIP);
         UIText(P.zone == ZONE_WASTE ? "Posizione attuale" : std::string("Ti trovi in: ") + W.zones[P.zone].name, ix, my + 36, 18, PIP_DIM);
@@ -567,7 +557,7 @@ void LootOpen(int inter) {
     G.pipSel = 0;
     PlaySfx(SFX_DOOR, 0.5f, 1.4f);
     Interactable& it = G.inters[inter];
-    if (it.tag == "cache" && QUESTS[Q_SIGNAL].stage == 40) CompleteQuest(Q_SIGNAL);
+    if (it.tag == "cache" && !it.locked && QUESTS[Q_SIGNAL].stage >= 20) CompleteQuest(Q_SIGNAL);
     if (it.tag == "exosuit" && !G.flags["found_exo"]) {
         G.flags["found_exo"] = 1;
         BigNotify("ESOSCHELETRO DA CARICO", "Porta qualsiasi cosa. Peccato per il fracasso.");

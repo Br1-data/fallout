@@ -245,17 +245,6 @@
     // che debba restare connesso. Ogni dodici minuti il segnale radio cambia itinerario.
     // Le fotografie sono un insieme monotono: i doppioni e l'ordine di arrivo non contano.
     var expedition = {round: -1, targets: [], players: Object.create(null)};
-    var laserRelayMask = 0; // SOS Lucciola: tre ripetitori riattivati dalla stanza corrente
-
-    function laserRelayBroadcast() {
-        if (net.kind !== 'off' && laserRelayMask) send('lr', {room: net.roomName, mask: laserRelayMask});
-    }
-
-    function laserRelayReceive(data) {
-        if (!data || typeof data !== 'object' || data.room !== net.roomName ||
-            !Number.isInteger(data.mask) || data.mask < 0 || data.mask > 7) return;
-        laserRelayMask |= data.mask;
-    }
 
     function expeditionCurrent() {
         var round = Math.floor(Date.now() / EXPEDITION_MS);
@@ -367,7 +356,6 @@
         net.lastHeartbeat = Date.now();
         if (net.profile) send('hb', net.profile);
         expeditionBroadcast(); // recupera perdite QoS 0 e aggiorna chi entra a spedizione iniziata
-        laserRelayBroadcast();
     }
 
     function receive(m, via) {
@@ -416,8 +404,6 @@
             push('E\t' + uid + '\t' + (num(d, 0, 9) | 0));
         } else if (m.t === 'ex') {
             expeditionReceive(d);
-        } else if (m.t === 'lr') {
-            laserRelayReceive(d);
         } else if (m.t === 'pi') {
             if (d && typeof d === 'object') send('po', {to: uid, n: num(d.n, 0, 1e9) | 0}, false);
         } else if (m.t === 'po') {
@@ -434,7 +420,6 @@
         for (var id in net.peers) dropPeer(id);
         net.queue.length = 0;
         expedition = {round: -1, targets: [], players: Object.create(null)};
-        laserRelayMask = 0;
         net.rc = null;
         if (net.kind === 'off') return;
         var gen = net.gen, room = net.roomName;
@@ -560,13 +545,6 @@
             expeditionBroadcast();
             return true;
         },
-        laserRelay: function (index) {
-            if (!Number.isInteger(index) || index < 0 || index > 2 || (laserRelayMask & (1 << index))) return false;
-            laserRelayMask |= 1 << index;
-            laserRelayBroadcast();
-            return true;
-        },
-        laserRelays: function () { return laserRelayMask; },
         // eventi dall'ultima lettura, una riga ciascuno
         poll: function () {
             for (var id in net.peers) {

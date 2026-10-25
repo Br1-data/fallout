@@ -177,6 +177,7 @@ enum ItemId {
     // missione / chiavi
     I_MEDSUPPLIES, I_KEYCARD, I_FUSIONCELL, I_JOURNAL, I_CACHEKEY, I_SCOUTNOTE, I_SAFEKEY, I_RECORD, I_ROTFOOD, I_MAINTCODE,
     I_BLASTER, // aggiunto in fondo per conservare gli ID dei salvataggi esistenti
+    I_CLAW,
     I_COUNT
 };
 
@@ -475,6 +476,8 @@ bool HasPhoto(const std::string& key);
 //  Missioni
 // ============================================================================
 enum QuestId { Q_MAIN, Q_ROACH, Q_MEDS, Q_BEAST, Q_SIGNAL, Q_PHOTO, Q_WATER, Q_DOG, Q_COUNT };
+// Gli ultimi tre slot restano nel formato dei salvataggi v2, fuori dalla campagna originale.
+constexpr int CAMPAIGN_QUEST_COUNT = Q_SIGNAL + 1;
 struct Quest { const char* title; int stage = 0; bool done = false; };
 struct QuestObjective { std::string text; int zone = -1; Vector3 pos{}; bool hasPos = false; };
 extern Quest QUESTS[Q_COUNT];
@@ -484,6 +487,7 @@ std::vector<QuestObjective> QuestObjectives(int q);
 std::string QuestDescription(int q);
 void QuestsUpdate(float dt);
 void QuestsOnPhoto(const std::string& key);
+void QuestsOnStun(Entity& entity);
 void QuestsOnRepair(const std::string& tag);
 void QuestsOnPickup(int item);
 void QuestsOnEnterZone(int zone);
@@ -527,14 +531,8 @@ void SpawnImpact(int zone, Vector3 p, Vector3 n, bool metal);
 void SpawnDynLight(int zone, Vector3 p, Color c, float range, float t);
 void SpawnLaser(int zone, Vector3 from, Vector3 to);
 void FireBlaster();
-void LaserMissionUpdate(float dt);
-void LaserMissionDraw3D();
-void LaserMissionDrawHud();
-bool LaserMissionHit(Vector3 origin, Vector3 direction, float maxDistance, Vector3& hit);
-bool LaserMissionInteract();
-Vector3 LaserRelayPosition(int index);
-Vector3 LaserMissionDronePosition();
-void LaserMissionMapDraw(const std::function<Vector2(Vector3)>& toMap, std::string& hover);
+bool CanSearchStunnedEntity(const Entity& entity);
+bool SearchStunnedEntity(int index);
 void ThrowObject(int zone, Vector3 p, Vector3 v, int kind);
 void EmittersUpdate(int zone, Vector3 camPos, float dt);
 void FxCollectLights(int zone, std::vector<LightSrc>& out);

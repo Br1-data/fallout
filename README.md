@@ -51,6 +51,7 @@ Ogni stanza ha una **spedizione di 12 minuti**: tre luoghi delle Terre Bruciate 
 insieme. Il riquadro durante il gioco mostra il tempo rimasto, i soggetti e chi li ha già trovati;
 il menu **Multigiocatore** mostra anche i contributi personali della squadra. Dividetevi i luoghi,
 usate la chat per coordinarvi e raggiungete gli amici dalla mappa del Pip-Boy.
+Le spedizioni sono un'attività multigiocatore facoltativa; la campagna segue le cinque missioni originali.
 
 Servono scatti nuovi, anche se il soggetto è già nel proprio catalogo. Quando tutti e tre i luoghi
 sono stati fotografati, ogni partecipante che ha contribuito ottiene **120 PE e 60 tappi**,
@@ -59,10 +60,10 @@ scadenza, oppure tentare la spedizione da soli. Allo scadere parte un nuovo turn
 obiettivi; chi entra dopo vede i progressi già condivisi e la partenza di un giocatore non li cancella.
 La sfida funziona anche con `?rete=locale`, mentre con `?rete=off` è disattivata.
 
-### Blaster a impulsi e SOS Lucciola
+### Blaster a impulsi
 
-Quando inizi a esplorare le Terre Bruciate ricevi un **blaster di soccorso**: premi **5** per
-equipaggiarlo e fai clic per sparare raggi ciano, con lampi, scintille e suono spaziale.
+Premi **5** per equipaggiare il **blaster a impulsi** e fai clic per sparare raggi ciano,
+con lampi, scintille e suono spaziale.
 Ogni colpo consuma **8 PA**, che si ricaricano normalmente. Puoi colpire **nemici, persone e
 creature**, anche i personaggi amichevoli: rimangono **storditi per 6 secondi** e poi si riprendono.
 Sentinelle e telecamere subiscono un sovraccarico temporaneo. Chi e' stordito non può muoversi,
@@ -70,13 +71,6 @@ inseguirti o parlare: sfrutta la pausa per passare oppure attendi per continuare
 I personaggi delle missioni e i compagni restano in vita e riprendono le proprie attività.
 I tuoi amici vedono il blaster e i suoi raggi.
 Sul telefono selezionalo con **ATTREZZO** e spara con **USA**.
-
-Nella nuova missione **SOS Lucciola**, un piccolo drone è disperso vicino alla Torre Radio.
-Colpisci i globi dei tre ripetitori al cancello di Ferrocittà, alla Stazione Atomo e alla fattoria
-abbandonata: sono segnati in ciano sulla mappa del Pip-Boy. I ripetitori attivati dagli amici
-nella stessa stanza aiutano tutti, anche chi arriva più tardi. Poi raggiungi il drone e premi **E**:
-ottieni **200 PE, 150 tappi e Lucciola come compagno volante**. Il premio è unico per personaggio;
-la missione e il blaster restano nel salvataggio. Puoi completarla anche da solo e offline.
 
 | Multigiocatore: l'amico arriva dal telefono | Comandi touch su telefono |
 |---|---|
@@ -98,9 +92,9 @@ Anno 2161. Il reattore a fusione del **Rifugio 33** si sta spegnendo. Il Sovrint
 una missione disperata: trovare una cella di fusione sperimentale nella **Base Delta-9**, sigillata
 da decenni e sorvegliata da sentinelle robotiche che scortano fuori chiunque si avvicini.
 
-Lungo la strada incontrerai l'insediamento di **Ferrocittà**, la banda territoriale di **Teschio**,
-un naturalista che sogna di fotografare una bestia leggendaria, un'esploratrice bloccata su una
-torre radio e un cane che ha perso la strada di casa.
+Lungo la strada incontrerai l'insediamento di **Ferrocittà**, la banda di predoni di **Teschio**,
+ghoul, mutanti, radscarafaggi e una bestia leggendaria nascosta in una gola a nord-ovest.
+La radio del Pip-Boy capta anche un vecchio segnale di soccorso dalla Torre Radio.
 
 Il finale cambia in base a come hai risolto le missioni e al tuo karma.
 
@@ -124,22 +118,20 @@ Puoi affrontarli con il blaster oppure osservare, nasconderti, distrarre, convin
 - **Riparazioni** — pompe, trasmettitori e generatori da rimettere in funzione con kit e ricambi.
 - **Scale**, **serrature** da scassinare, **terminali** da violare, **dialoghi** con prove di
   abilità, baratto e accordi.
-- **Ruggine**, un cane da salvare che poi ti segue e ringhia piano quando fiuta un pericolo.
 - Se i PF finiscono (radiazioni, cadute, stanchezza) **perdi i sensi** e ti risvegli in clinica.
 
-### Missioni
+### Le cinque missioni originali
 
 - **Il cuore del Rifugio** — la missione principale. La tessera del cancello si ottiene da Teschio
-  con la parlantina, con i tappi, scambiandola con un disco d'anteguerra o rubandola dalla sua
-  cassaforte; in alternativa si può violare il terminale del cancello. Dentro la base la Sentinella
-  Mk.V si spegne con un codice di manutenzione... o si aggira.
-- **Ospiti indesiderati** — porta via i sacchi di cibo marcio che attirano i radscarafaggi.
+  oppure si viola il terminale del cancello. Attraversa la Base Delta-9, recupera la cella di
+  fusione e riportala al reattore del Rifugio 33. Puoi stordire Teschio e perquisirlo per la tessera.
+- **Infestazione** — libera la Stazione Atomo mettendo fuori combattimento i radscarafaggi,
+  poi torna da Tano per la ricompensa.
 - **Medicine per Ferrocittà** — recupera i rifornimenti dall'ospedale delle rovine, tra i ghoul.
-- **La bestia della gola** — fotografa lo Squarciatore senza svegliarlo.
-- **Segnale nel deserto** — aiuta un'esploratrice e ripara il trasmettitore in cima alla torre.
-- **Il catalogo di Jack** — otto fotografie per il naturalista di Ferrocittà.
-- **Acqua per Ferrocittà** — ripara la pompa dell'acqua della città.
-- **Il cane di Rita** — ritrova Ruggine alla fattoria abbandonata.
+- **La bestia della gola** — dai la caccia allo Squarciatore, stordiscilo e recupera l'artiglio
+  da portare a Jack Falco come prova.
+- **Segnale nel deserto** — segui il segnale di soccorso, recupera il messaggio e la chiave
+  dell'esploratore, poi trova il suo deposito sul bordo del Cratere Verde.
 
 ## Caratteristiche
 
@@ -229,9 +221,9 @@ versione web, esegue lo stesso test dentro Chromium e, dal ramo `main`, la pubbl
 
 ### Test automatico
 
-`Dustfall --selftest` gioca da solo l'intera trama (dialoghi, fotografie, esche, barattoli, essere
-scacciati, riparazioni, scale, terminali, tutte le otto missioni, svenimento, salvataggio/caricamento,
-finale e partenza in mondo aperto) e verifica che tutto funzioni. Nella versione web lo stesso test si
+`Dustfall --selftest` gioca da solo l'intera trama (dialoghi, combattimenti non letali, bottino,
+tutte le cinque missioni originali, svenimento, salvataggio/caricamento, finale e partenza in
+mondo aperto) e verifica che tutto funzioni. Nella versione web lo stesso test si
 avvia con `index.html?rete=off&args=--selftest`, oppure con `node tools/web_selftest.js build-web/site`.
 `Dustfall --newgame --zone 0 --pos 0 60 --yaw 180 --time 15 --shot foto.png` scatta uno
 screenshot da una posizione qualsiasi.

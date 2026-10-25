@@ -1403,6 +1403,8 @@ void BuildRadioTower() {
         Interactable& c = Cont(ZONE_WASTE, hx + 1.4f, hz - 1.3f, 0, CM_NONE, 1, 0, "scout_pack", g + 0.27f);
         c.name = "Zaino di Vera";
         c.inv.Clear();
+        c.inv.Add(I_SCOUTNOTE);
+        c.inv.Add(I_CACHEKEY);
         c.inv.Add(I_WATER, 2);
         c.inv.Add(I_BAIT, 2);
         c.inv.Add(I_CAPS, 25);

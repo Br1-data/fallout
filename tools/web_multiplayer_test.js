@@ -116,13 +116,10 @@ async function run() {
         await wait(a, () => DustfallNet.expedition().targets.filter(t => t.done).length === 2);
         assert.equal(await b.evaluate(key => DustfallNet.expeditionPhoto(key), keys[1]), false);
         assert.equal(await b.evaluate(() => DustfallNet.expedition().own), 1);
-        assert.equal(await a.evaluate(() => DustfallNet.laserRelay(0)), true);
-        await wait(b, () => DustfallNet.laserRelays() === 1);
-        assert.equal(await b.evaluate(() => DustfallNet.laserRelay(0)), false);
-        console.log('[OK] Foto e ripetitori condivisi; nessun contributo duplicato o personale inventato.');
+        console.log('[OK] Foto condivise; nessun contributo duplicato o personale inventato.');
 
         const c = await makePage('Carla', room);
-        await wait(c, () => DustfallNet.expedition().targets.filter(t => t.done).length === 2 && DustfallNet.laserRelays() === 1);
+        await wait(c, () => DustfallNet.expedition().targets.filter(t => t.done).length === 2);
         assert.equal(await c.evaluate(() => DustfallNet.expedition().own), 0);
         await a.evaluate(() => DustfallNet.bye());
         await a.context().close();
@@ -130,26 +127,20 @@ async function run() {
         await wait(b, () => DustfallNet.expedition().complete);
         await wait(c, () => DustfallNet.expedition().complete);
         assert.ok(await c.evaluate(() => DustfallNet.expedition().contributors.some(p => p.name === 'Ada' && p.count === 1)));
-        assert.equal(await b.evaluate(() => DustfallNet.laserRelay(2)), true);
-        await wait(c, () => DustfallNet.laserRelays() === 5);
         console.log('[OK] Ingresso tardivo, uscita del primo giocatore e completamento senza host.');
 
         const d = await makePage('Dina', room + '-alt');
         assert.equal(await d.evaluate(() => DustfallNet.peerCount()), 0);
         assert.equal(await d.evaluate(() => DustfallNet.expedition().targets.filter(t => t.done).length), 0);
-        assert.equal(await d.evaluate(() => DustfallNet.laserRelays()), 0);
         await c.evaluate(name => DustfallNet.setRoom(name), room + '-alt');
         await wait(c, () => DustfallNet.peerCount() === 1);
         await wait(d, () => DustfallNet.peerCount() === 1);
         assert.equal(await c.evaluate(() => DustfallNet.expedition().own), 0);
         assert.equal(await c.evaluate(() => DustfallNet.expedition().complete), false);
-        assert.equal(await c.evaluate(() => DustfallNet.laserRelays()), 0);
-        assert.equal(await d.evaluate(() => DustfallNet.laserRelay(1)), true);
-        await wait(c, () => DustfallNet.laserRelays() === 2);
-        assert.equal(await b.evaluate(() => DustfallNet.laserRelays()), 5);
-        console.log('[OK] Cambio stanza e isolamento dei progressi di foto e missione laser.');
+        assert.equal(await b.evaluate(() => DustfallNet.expedition().complete), true);
+        console.log('[OK] Cambio stanza e isolamento dei progressi fotografici.');
 
-        // Questa parte attraversa tastiera -> gameplay C++ -> ponte WASM -> MQTT, senza chiamare laserRelay.
+        // Questa parte attraversa tastiera -> gameplay C++ -> ponte WASM -> MQTT.
         const observer = await makePage('Osservatore', room + '-shot');
         const game = await makePage('Gameplay', room + '-shot',
             '--openworld --zone 0 --pos 0 76 --yaw 180 --pitch 0 --give all --name Collaudatore');
@@ -162,11 +153,11 @@ async function run() {
         await game.keyboard.up('5');
         // Attendi anche la fine dell'animazione di equipaggiamento prima del clic.
         await settleInput(game);
-        assert.equal(await game.evaluate(() => DustfallNet.laserRelays()), 0);
+        const shot = await game.evaluate(() => ({ id: DustfallNet.selfId(), flash: DustfallNet.debug().self[9] }));
         await game.mouse.move(640, 360);
         await game.mouse.down();
         try {
-            await wait(game, () => (DustfallNet.laserRelays() & 1) !== 0);
+            await wait(game, before => DustfallNet.debug().self[9] > before, shot.flash);
         } catch (error) {
             console.error('Stato del giocatore:', await game.evaluate(() => DustfallNet.debug().self));
             if (process.env.DUSTFALL_TEST_ARTIFACTS) {
@@ -176,13 +167,16 @@ async function run() {
             throw error;
         }
         await game.mouse.up();
-        await wait(observer, () => DustfallNet.laserRelays() === 1);
-        assert.equal(await game.evaluate(() => DustfallNet.laserRelays()), 1);
+        await wait(observer, ({ id, flash }) => {
+            const peer = DustfallNet.debug().peers[id];
+            return peer && peer.state && peer.state[8] === 4 && peer.state[9] > flash;
+        }, shot);
+        assert.equal(await game.evaluate(() => DustfallNet.debug().self[9]), shot.flash + 1);
         if (process.env.DUSTFALL_TEST_ARTIFACTS) {
             fs.mkdirSync(process.env.DUSTFALL_TEST_ARTIFACTS, { recursive: true });
             await game.screenshot({ path: path.join(process.env.DUSTFALL_TEST_ARTIFACTS, 'multiplayer.png') });
         }
-        console.log('[OK] Un colpo reale del blaster nel gioco attiva il ripetitore e attraversa il ponte WASM.');
+        console.log('[OK] Un colpo reale del blaster attraversa il ponte WASM e raggiunge un altro browser tramite MQTT.');
         async function quicksave() {
             await game.evaluate(() => { try { Module.FS.unlink('/dustfall/saves/slot6.sav'); } catch (_) {} });
             await game.keyboard.down('F5');

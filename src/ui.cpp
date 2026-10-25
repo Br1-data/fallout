@@ -175,6 +175,7 @@ static std::string InteractPrompt() {
     }
     if (G.lookEnt >= 0) {
         Entity& e = G.ents[G.lookEnt];
+        if (CanSearchStunnedEntity(e)) return e.tag == "boss" ? "E) Perquisisci Teschio" : "E) Raccogli l'artiglio spezzato";
         if (e.kind != EK_HUMAN) return "E) Avvicinati a  " + e.name;
         return "E) Parla  " + e.name;
     }

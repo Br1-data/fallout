@@ -155,6 +155,7 @@ bool LoadGame(int slot) {
     }
     size_t nf = 0;
     in >> nf;
+    G.flags.clear();
     for (size_t i = 0; i < nf; i++) {
         std::string k;
         int v;
@@ -162,6 +163,14 @@ bool LoadGame(int slot) {
         G.flags[k] = v;
     }
     for (int q = 0; q < Q_COUNT; q++) in >> QUESTS[q].stage >> QUESTS[q].done;
+    for (int q = CAMPAIGN_QUEST_COUNT; q < Q_COUNT; q++) QUESTS[q] = Quest{QUESTS[q].title};
+    P.questsDone = 0;
+    for (int q = 0; q < CAMPAIGN_QUEST_COUNT; q++) P.questsDone += QUESTS[q].done;
+    if (!QUESTS[Q_SIGNAL].done && QUESTS[Q_SIGNAL].stage > 20) QUESTS[Q_SIGNAL].stage = 20;
+    if (!G.flags["original_blaster_granted"]) {
+        if (!P.inv.Count(I_BLASTER)) P.inv.Add(I_BLASTER);
+        G.flags["original_blaster_granted"] = 1;
+    }
     size_t nl = 0;
     in >> nl;
     for (size_t i = 0; i < nl; i++) {
@@ -211,6 +220,16 @@ bool LoadGame(int slot) {
     }
     int radio = 0;
     in >> radio;
+    // I vecchi salvataggi della campagna fotografica potevano aver gia' svuotato lo zaino.
+    // Il biglietto e la chiave originali devono restare recuperabili senza rifare la partita.
+    if (!QUESTS[Q_SIGNAL].done && !P.inv.Count(I_CACHEKEY)) {
+        Interactable* cache = FindInterByTag("cache");
+        Interactable* pack = FindInterByTag("scout_pack");
+        if (cache && cache->locked && pack) {
+            if (!pack->inv.Count(I_CACHEKEY)) pack->inv.Add(I_CACHEKEY);
+            if (!P.inv.Count(I_SCOUTNOTE) && !pack->inv.Count(I_SCOUTNOTE)) pack->inv.Add(I_SCOUTNOTE);
+        }
+    }
     SetRadioStation(radio);
     if (P.tool < 0 || P.tool >= TOOL_COUNT || (P.tool != TOOL_HANDS && P.inv.Count(ToolItem(P.tool)) == 0)) P.tool = TOOL_HANDS;
     if (P.armor >= I_COUNT || (P.armor >= 0 && P.inv.Count(P.armor) == 0)) P.armor = -1;

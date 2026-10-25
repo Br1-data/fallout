@@ -72,7 +72,7 @@ void ItemsInit() {
     ITEMS[I_BAIT].tool = TOOL_BAIT;
     ITEMS[I_NOISE].tool = TOOL_NOISE;
     Def(I_BLASTER, "Blaster a impulsi", IT_TOOL, 1.2f, 160,
-        "Un blaster a energia non letale. 5 per equipaggiarlo, clic per sparare (8 PA). Stordisce persone, nemici e creature per 6 secondi e riattiva i ripetitori di Lucciola.");
+        "Un blaster a energia non letale. 5 per equipaggiarlo, clic per sparare (8 PA). Stordisce persone, nemici e creature per 6 secondi. E perquisisce i bersagli delle missioni mentre sono storditi.");
     ITEMS[I_BLASTER].tool = TOOL_BLASTER;
 
     Def(I_VAULTSUIT, "Tuta del Rifugio 33", IT_ARMOR, 1, 10, "Blu e gialla, con il numero 33 sulla schiena.");
@@ -137,6 +137,8 @@ void ItemsInit() {
     Def(I_RECORD, "Disco d'anteguerra", IT_KEY, 1, 0, "Un 78 giri: \"Swing sotto la luna atomica\". Qualcuno ne sarebbe felicissimo.");
     Def(I_ROTFOOD, "Sacco di cibo marcio", IT_KEY, 4, 0, "Puzza in modo indescrivibile. È ciò che attira i radscarafaggi.");
     Def(I_MAINTCODE, "Codice di manutenzione", IT_KEY, 0, 0, "Un foglietto: \"Sentinella Mk.V - arresto di manutenzione: PROMETEO-0451\".");
+    Def(I_CLAW, "Artiglio dello Squarciatore", IT_KEY, 0.2f, 0,
+        "Un artiglio spezzato raccolto accanto allo Squarciatore stordito. La prova richiesta da Jack Falco: la bestia e' ancora viva.");
 }
 
 // ---------------------------------------------------------------------------

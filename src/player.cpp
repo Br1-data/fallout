@@ -238,6 +238,36 @@ void TakePhoto() {
     QuestsOnPhoto(bestKey);
 }
 
+bool CanSearchStunnedEntity(const Entity& e) {
+    if (e.stunT <= 0 || e.off) return false;
+    const char* flag = e.tag == "boss" ? "original_boss_searched" : (e.tag == "beast" ? "original_beast_claw_taken" : nullptr);
+    if (!flag) return false;
+    auto found = G.flags.find(flag);
+    return found == G.flags.end() || found->second == 0;
+}
+
+bool SearchStunnedEntity(int index) {
+    if (index < 0 || index >= (int)G.ents.size()) return false;
+    Entity& e = G.ents[index];
+    if (!CanSearchStunnedEntity(e) || e.zone != G.player.zone ||
+        Vector3Distance(G.player.pos, e.pos) > 4.0f + EntityRadius(e) ||
+        !LineOfSight(e.zone, PlayerEye(), EntityCenter(e))) return false;
+    if (e.tag == "boss") {
+        G.flags["original_boss_searched"] = 1;
+        if (Interactable* safe = FindInterByTag("boss_safe")) safe->inv.Remove(I_KEYCARD, safe->inv.Count(I_KEYCARD));
+        if (!G.player.inv.Count(I_KEYCARD)) GiveItem(I_KEYCARD);
+        if (!G.player.inv.Count(I_SAFEKEY)) GiveItem(I_SAFEKEY);
+        GiveItem(I_CAPS, 150);
+        Notify("Hai recuperato la tessera di Delta-9 da Teschio, ancora vivo.");
+    } else {
+        G.flags["original_beast_claw_taken"] = 1;
+        GiveItem(I_CLAW);
+        Notify("Hai raccolto un artiglio spezzato: portalo a Jack Falco.");
+    }
+    PlaySfx(SFX_PICKUP);
+    return true;
+}
+
 void FireBlaster() {
     Player& P = G.player;
     if (P.inv.Count(I_BLASTER) == 0 || P.useCd > 0) return;
@@ -253,7 +283,7 @@ void FireBlaster() {
     bool hitEntity = RaycastEntities(P.zone, origin, direction, distance, entityHit);
     if (hitEntity) distance = entityHit.t;
     Vector3 impact = origin + direction * distance;
-    if (!LaserMissionHit(origin, direction, distance, impact) && hitEntity) {
+    if (hitEntity) {
         Entity& e = G.ents[entityHit.entity];
         if (!e.off) {
             e.stunT = 6;
@@ -262,6 +292,7 @@ void FireBlaster() {
             e.aware = false;
             e.alert = 0;
             if (!e.companion) e.ai = AI_RETURN;
+            QuestsOnStun(e);
             bool machine = e.kind == EK_ROBOT || e.kind == EK_CAMERA;
             Notify(e.name + (machine ? ": sovraccarico per 6 secondi!" : ": stordito per 6 secondi!"), Col(110, 235, 255));
         }
@@ -440,7 +471,8 @@ static void FindInteraction() {
     float best = 0.38f;
     for (int i = 0; i < (int)G.ents.size(); i++) {
         Entity& e = G.ents[i];
-        if (e.zone != P.zone || e.hostile || e.stunT > 0 || e.dlg.empty()) continue;
+        bool search = CanSearchStunnedEntity(e);
+        if (e.zone != P.zone || (!search && (e.hostile || e.stunT > 0 || e.dlg.empty()))) continue;
         Vector3 c = EntityCenter(e);
         Vector3 to = c - eye;
         float d = Vector3Length(to);
@@ -600,9 +632,8 @@ void PlayerUpdate(float dt) {
     // --- interazione ---
     FindInteraction();
     if (IsKeyPressed(KEY_E)) {
-        if (LaserMissionInteract()) {}
-        else if (G.lookInter >= 0) Interact(G.lookInter);
-        else if (G.lookEnt >= 0) DialogueStart(G.lookEnt);
+        if (G.lookInter >= 0) Interact(G.lookInter);
+        else if (G.lookEnt >= 0 && !SearchStunnedEntity(G.lookEnt)) DialogueStart(G.lookEnt);
     }
 
     // --- radiazioni, cure, effetti ---

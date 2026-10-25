@@ -68,8 +68,6 @@ EM_JS(char*, js_net_room, (), {
 });
 EM_JS(void, js_net_chat, (const char* t), { DustfallNet.sendChat(UTF8ToString(t)); });
 EM_JS(void, js_net_emote, (int e), { DustfallNet.sendEmote(e); });
-EM_JS(void, js_net_laser_relay, (int index), { if (DustfallNet.laserRelay) DustfallNet.laserRelay(index); });
-EM_JS(int, js_net_laser_relays, (), { return DustfallNet.laserRelays ? DustfallNet.laserRelays() : 0; });
 EM_JS(int, js_net_photo, (const char* key), {
     return DustfallNet.expeditionPhoto ? DustfallNet.expeditionPhoto(UTF8ToString(key)) : 0;
 });
@@ -163,19 +161,6 @@ bool NetPhoto(const std::string& key) {
     }
 #endif
     return false;
-}
-
-void NetLaserRelay(int index) {
-#if DUSTFALL_WEB
-    if (sAvail) js_net_laser_relay(index);
-#endif
-}
-
-int NetLaserRelays() {
-#if DUSTFALL_WEB
-    if (sAvail) return js_net_laser_relays();
-#endif
-    return 0;
 }
 
 #if DUSTFALL_WEB
