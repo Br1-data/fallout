@@ -27,6 +27,9 @@ void NetDraw3D(Camera3D cam);        // avatar degli altri giocatori
 void NetDrawHud();                   // nomi, chat, stato della rete
 bool NetPlayKeys();                  // tasti del multigiocatore durante il gioco (true = stato cambiato)
 float NetLocalWave();                // animazione del saluto del giocatore locale
+bool NetPhoto(const std::string& key); // nuovo contributo alla spedizione della stanza
+void NetLaserRelay(int index);
+int NetLaserRelays();
 
 void ChatUpdate();                   // GS_CHAT
 void OnlineOpen(GameState back);     // GS_ONLINE: stanza, invito, elenco dei giocatori

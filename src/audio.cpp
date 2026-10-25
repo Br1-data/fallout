@@ -121,6 +121,7 @@ static std::vector<float> Ping(float len, float f, float decay) {
 }
 
 static void BuildSfx() {
+    sBase[SFX_LASER] = ToSound(Sweep(0.24f, 1800, 110, 17, 0.18f, 0.04f), 0.6f);
     {
         // otturatore: due scatti e il trascinamento della pellicola
         auto b = Buf(0.42f);

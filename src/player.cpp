@@ -83,6 +83,7 @@ int ToolItem(int tool) {
         case TOOL_CAMERA: return I_CAMERA;
         case TOOL_BAIT: return I_BAIT;
         case TOOL_NOISE: return I_NOISE;
+        case TOOL_BLASTER: return I_BLASTER;
         default: return -1;
     }
 }
@@ -222,8 +223,9 @@ void TakePhoto() {
         Notify("Nessun soggetto interessante nell'inquadratura.", Col(200, 220, 200));
         return;
     }
+    bool expeditionPhoto = NetPhoto(bestKey);
     if (HasPhoto(bestKey)) {
-        Notify(Fmt("Hai già una foto di: %s", bestName.c_str()), Col(200, 220, 200));
+        if (!expeditionPhoto) Notify(Fmt("Hai già una foto di: %s", bestName.c_str()), Col(200, 220, 200));
         return;
     }
     P.photos.push_back(bestKey);
@@ -236,12 +238,43 @@ void TakePhoto() {
     QuestsOnPhoto(bestKey);
 }
 
+void FireBlaster() {
+    Player& P = G.player;
+    if (P.inv.Count(I_BLASTER) == 0 || P.useCd > 0) return;
+    if (P.ap < 8) { Notify("Blaster scarico: attendi la ricarica dei PA."); return; }
+    P.ap -= 8;
+    P.useCd = 0.45f;
+    P.flash = 0.16f;
+    Vector3 origin = G.cam.position;
+    Vector3 direction = Vector3Normalize(G.cam.target - origin);
+    float distance = 95;
+    RayHit worldHit{}, entityHit{};
+    if (RaycastWorld(P.zone, origin, direction, distance, worldHit)) distance = worldHit.t;
+    bool hitEntity = RaycastEntities(P.zone, origin, direction, distance, entityHit);
+    if (hitEntity) distance = entityHit.t;
+    Vector3 impact = origin + direction * distance;
+    if (!LaserMissionHit(origin, direction, distance, impact) && hitEntity) {
+        Entity& e = G.ents[entityHit.entity];
+        if (e.hostile && !e.off && (e.kind == EK_ROBOT || e.kind == EK_CAMERA)) {
+            e.stunT = 6;
+            e.aware = false;
+            e.alert = 0;
+            e.ai = AI_RETURN;
+            Notify(e.name + ": sovraccarico per 6 secondi!", Col(110, 235, 255));
+        }
+    }
+    Vector3 right = Vector3Normalize(Vector3CrossProduct(direction, V3(0, 1, 0)));
+    SpawnLaser(P.zone, origin + right * 0.2f - V3(0, 0.15f, 0) + direction * 0.5f, impact);
+    PlaySfx(SFX_LASER, 0.7f);
+}
+
 static void UseTool() {
     Player& P = G.player;
     switch (P.tool) {
         case TOOL_CAMERA: TakePhoto(); break;
         case TOOL_BAIT: ThrowTool(TOOL_BAIT); break;
         case TOOL_NOISE: ThrowTool(TOOL_NOISE); break;
+        case TOOL_BLASTER: FireBlaster(); break;
         default: break;
     }
 }
@@ -564,7 +597,8 @@ void PlayerUpdate(float dt) {
     // --- interazione ---
     FindInteraction();
     if (IsKeyPressed(KEY_E)) {
-        if (G.lookInter >= 0) Interact(G.lookInter);
+        if (LaserMissionInteract()) {}
+        else if (G.lookInter >= 0) Interact(G.lookInter);
         else if (G.lookEnt >= 0) DialogueStart(G.lookEnt);
     }
 

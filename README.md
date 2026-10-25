@@ -1,9 +1,9 @@
 # DUSTFALL — Cronache delle Terre Bruciate
 
 Avventura **3D open world in prima/terza persona**, ambientata in un mondo post-apocalittico in
-stile *Fallout* — ma **senza violenza**: niente armi, niente combattimenti, nessuno muore. Un
-abitante di un Rifugio antiatomico esce per la prima volta nelle Terre Bruciate armato solo di una
-fotocamera, di un po' di astuzia e di tanta curiosità.
+stile *Fallout* — ma **senza violenza**: nessuno muore. Un abitante di un Rifugio antiatomico
+esce per la prima volta nelle Terre Bruciate con una fotocamera, un blaster di soccorso,
+un po' di astuzia e tanta curiosità.
 
 Si gioca **nel browser, anche da telefono, e in multigiocatore con gli amici**:
 **[br1-data.github.io/fallout](https://br1-data.github.io/fallout/)** — oppure con l'eseguibile per Windows.
@@ -44,6 +44,36 @@ messaggi sia **direttamente** (WebRTC, quando la rete lo permette) sia tramite *
 (EMQX e HiveMQ), che funzionano anche dalle reti dei telefoni. Sui broker i messaggi viaggiano cifrati
 con una chiave ricavata dal nome della stanza: chi non conosce il nome della stanza non li legge.
 La stanza *pubblica* è, appunto, pubblica.
+
+### Spedizioni fotografiche cooperative
+
+Ogni stanza ha una **spedizione di 12 minuti**: tre luoghi delle Terre Bruciate da fotografare
+insieme. Il riquadro durante il gioco mostra il tempo rimasto, i soggetti e chi li ha già trovati;
+il menu **Multigiocatore** mostra anche i contributi personali della squadra. Dividetevi i luoghi,
+usate la chat per coordinarvi e raggiungete gli amici dalla mappa del Pip-Boy.
+
+Servono scatti nuovi, anche se il soggetto è già nel proprio catalogo. Quando tutti e tre i luoghi
+sono stati fotografati, ogni partecipante che ha contribuito ottiene **120 PE e 60 tappi**,
+una volta per turno e personaggio. Si può contribuire anche dopo il completamento, fino alla
+scadenza, oppure tentare la spedizione da soli. Allo scadere parte un nuovo turno con altri
+obiettivi; chi entra dopo vede i progressi già condivisi e la partenza di un giocatore non li cancella.
+La sfida funziona anche con `?rete=locale`, mentre con `?rete=off` è disattivata.
+
+### Blaster a impulsi e SOS Lucciola
+
+Quando inizi a esplorare le Terre Bruciate ricevi un **blaster di soccorso**: premi **5** per
+equipaggiarlo e fai clic per sparare raggi ciano, con lampi, scintille e suono spaziale.
+Ogni colpo consuma **8 PA**, che si ricaricano normalmente. Un colpo su una sentinella o
+telecamera ostile la mette in sovraccarico per **6 secondi**; non ferisce persone o creature.
+I tuoi amici vedono il blaster e i suoi raggi.
+Sul telefono selezionalo con **ATTREZZO** e spara con **USA**.
+
+Nella nuova missione **SOS Lucciola**, un piccolo drone è disperso vicino alla Torre Radio.
+Colpisci i globi dei tre ripetitori al cancello di Ferrocittà, alla Stazione Atomo e alla fattoria
+abbandonata: sono segnati in ciano sulla mappa del Pip-Boy. I ripetitori attivati dagli amici
+nella stessa stanza aiutano tutti, anche chi arriva più tardi. Poi raggiungi il drone e premi **E**:
+ottieni **200 PE, 150 tappi e Lucciola come compagno volante**. Il premio è unico per personaggio;
+la missione e il blaster restano nel salvataggio. Puoi completarla anche da solo e offline.
 
 | Multigiocatore: l'amico arriva dal telefono | Comandi touch su telefono |
 |---|---|
@@ -136,6 +166,7 @@ Per andare avanti devi osservare, nasconderti, distrarre, convincere e riparare:
 | **Clic sinistro** | Usare l'attrezzo in mano (scattare, lanciare) |
 | **Clic destro** | Zoom della fotocamera |
 | **1 / 2 / 3 / 4, rotella** | Mani libere / fotocamera / esca / barattolo |
+| **5** | Blaster a impulsi (clic sinistro per sparare) |
 | **B** | Lanciare un'esca di carne |
 | **G** | Lanciare un barattolo rumoroso |
 | **E** | Interagire, parlare, raccogliere, riparare, salire sulle scale |

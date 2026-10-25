@@ -20,6 +20,10 @@
     var PEER_TIMEOUT_MS = 12000;
     var DIRECT_FRESH_MS = 5000; // un giocatore è "diretto" se lo abbiamo sentito via WebRTC da poco
     var MAX_NAME = 18, MAX_CHAT = 140, MAX_WHERE = 40;
+    var EXPEDITION_MS = 12 * 60 * 1000;
+    var EXPEDITION_MAX_PLAYERS = 64;
+    var EXPEDITION_POOL = ['vault_door', 'water_tower', 'atom_sign', 'silo', 'radio_tower',
+                           'crater', 'hospital', 'skyscraper', 'base_gate'];
 
     function clean(s, n) {
         return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -237,6 +241,96 @@
         lastHeartbeat: 0
     };
 
+    // Spedizioni fotografiche: stessi obiettivi per tutta la stanza, senza un caposquadra
+    // che debba restare connesso. Ogni dodici minuti il segnale radio cambia itinerario.
+    // Le fotografie sono un insieme monotono: i doppioni e l'ordine di arrivo non contano.
+    var expedition = {round: -1, targets: [], players: Object.create(null)};
+    var laserRelayMask = 0; // SOS Lucciola: tre ripetitori riattivati dalla stanza corrente
+
+    function laserRelayBroadcast() {
+        if (net.kind !== 'off' && laserRelayMask) send('lr', {room: net.roomName, mask: laserRelayMask});
+    }
+
+    function laserRelayReceive(data) {
+        if (!data || typeof data !== 'object' || data.room !== net.roomName ||
+            !Number.isInteger(data.mask) || data.mask < 0 || data.mask > 7) return;
+        laserRelayMask |= data.mask;
+    }
+
+    function expeditionCurrent() {
+        var round = Math.floor(Date.now() / EXPEDITION_MS);
+        if (expedition.round === round) return expedition;
+        var seed = 2166136261, text = net.roomName + '|' + round;
+        for (var i = 0; i < text.length; i++) seed = Math.imul(seed ^ text.charCodeAt(i), 16777619) >>> 0;
+        var pool = EXPEDITION_POOL.slice();
+        for (var j = pool.length - 1; j > 0; j--) {
+            seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+            var k = seed % (j + 1), swap = pool[j];
+            pool[j] = pool[k]; pool[k] = swap;
+        }
+        expedition = {round: round, targets: pool.slice(0, 3), players: Object.create(null)};
+        return expedition;
+    }
+
+    function expeditionSnapshot() {
+        var e = expeditionCurrent();
+        return {r: e.round, room: net.roomName, c: Object.keys(e.players).sort().map(function (id) {
+            var p = e.players[id];
+            return {u: id, n: p.name, p: Object.keys(p.photos).sort().map(function (key) { return {k: key, t: p.photos[key]}; })};
+        })};
+    }
+
+    function expeditionBroadcast() {
+        if (net.kind !== 'off') send('ex', expeditionSnapshot());
+    }
+
+    function expeditionReceive(data) {
+        var e = expeditionCurrent(), now = Date.now();
+        if (!data || typeof data !== 'object' || data.r !== e.round || data.room !== net.roomName ||
+            !Array.isArray(data.c) || data.c.length > EXPEDITION_MAX_PLAYERS) return;
+        data.c.forEach(function (row) {
+            // Nessun altro browser può attribuire una fotografia al giocatore locale.
+            if (!row || typeof row !== 'object' || typeof row.u !== 'string' ||
+                !/^[a-z0-9]{1,32}$/.test(row.u) || row.u === net.uid ||
+                typeof row.n !== 'string' || row.n.length > 128 || !Array.isArray(row.p) ||
+                !row.p.length || row.p.length > 3) return;
+            var photos = Object.create(null);
+            for (var i = 0; i < row.p.length; i++) {
+                var photo = row.p[i];
+                if (!photo || e.targets.indexOf(photo.k) < 0 || typeof photo.t !== 'number' ||
+                    !Number.isSafeInteger(photo.t) || photo.t < e.round * EXPEDITION_MS ||
+                    photo.t >= (e.round + 1) * EXPEDITION_MS || photo.t > now + 5000) return;
+                photos[photo.k] = Math.min(photos[photo.k] || photo.t, photo.t);
+            }
+            var p = e.players[row.u], name = clean(row.n, MAX_NAME) || 'Viandante';
+            // Un posto resta riservato al giocatore locale anche nelle stanze molto affollate.
+            if (!p && Object.keys(e.players).length >= EXPEDITION_MAX_PLAYERS - (e.players[net.uid] ? 0 : 1)) return;
+            if (!p) p = e.players[row.u] = {name: name, photos: Object.create(null)};
+            else if (name < p.name) p.name = name;
+            Object.keys(photos).forEach(function (key) { p.photos[key] = Math.min(p.photos[key] || photos[key], photos[key]); });
+        });
+    }
+
+    function expeditionView() {
+        var e = expeditionCurrent(), active = net.kind !== 'off', ids = active ? Object.keys(e.players).sort() : [];
+        var targets = e.targets.map(function (key) {
+            var first = null;
+            ids.forEach(function (id) {
+                var p = e.players[id];
+                if (p.photos[key] !== undefined && (!first || p.photos[key] < first.time ||
+                    (p.photos[key] === first.time && id < first.id))) first = {id: id, time: p.photos[key], name: p.name};
+            });
+            return {key: key, done: !!first, by: first ? first.name : ''};
+        });
+        var own = active && e.players[net.uid] ? Object.keys(e.players[net.uid].photos).length : 0;
+        return {
+            round: e.round, seconds: Math.max(0, Math.ceil(((e.round + 1) * EXPEDITION_MS - Date.now()) / 1000)),
+            complete: active && targets.every(function (t) { return t.done; }), own: own, targets: targets,
+            contributors: ids.map(function (id) { return {id: id, name: e.players[id].name, count: Object.keys(e.players[id].photos).length}; })
+                .sort(function (a, b) { return b.count - a.count || a.id.localeCompare(b.id); })
+        };
+    }
+
     function push(line) {
         net.queue.push(line);
         if (net.queue.length > 400) net.queue.splice(0, net.queue.length - 400);
@@ -272,12 +366,13 @@
     function heartbeat() {
         net.lastHeartbeat = Date.now();
         if (net.profile) send('hb', net.profile);
+        expeditionBroadcast(); // recupera perdite QoS 0 e aggiorna chi entra a spedizione iniziata
+        laserRelayBroadcast();
     }
 
     function receive(m, via) {
-        if (!m || typeof m !== 'object' || typeof m.u !== 'string' || m.u === net.uid || m.u.length > 32) return;
-        var uid = m.u.replace(/[^a-z0-9]/g, '');
-        if (!uid) return;
+        if (!m || typeof m !== 'object' || typeof m.u !== 'string' || m.u === net.uid || !/^[a-z0-9]{1,32}$/.test(m.u)) return;
+        var uid = m.u;
         var seq = num(m.s, 0, 1e12);
         var p = net.peers[uid];
         var now = Date.now();
@@ -300,7 +395,7 @@
             if (seq <= p.stateSeq || !Array.isArray(d) || d.length < 12) return;
             p.stateSeq = seq;
             p.state = [num(d[0], 0, 2) | 0, num(d[1], -2000, 2000), num(d[2], -500, 500), num(d[3], -2000, 2000),
-                       num(d[4], -10, 10), num(d[5], -2, 2), num(d[6], 0, 30), num(d[7], 0, 1) | 0, num(d[8], 0, 3) | 0,
+                       num(d[4], -10, 10), num(d[5], -2, 2), num(d[6], 0, 30), num(d[7], 0, 1) | 0, num(d[8], 0, 4) | 0,
                        num(d[9], 0, 1e6) | 0, num(d[10], 0, 1e6) | 0, num(d[11], 0, 1) | 0];
             p.stateNew = true;
         } else if (m.t === 'hb') {
@@ -319,6 +414,10 @@
             push('C\t' + uid + '\t' + text);
         } else if (m.t === 'em') {
             push('E\t' + uid + '\t' + (num(d, 0, 9) | 0));
+        } else if (m.t === 'ex') {
+            expeditionReceive(d);
+        } else if (m.t === 'lr') {
+            laserRelayReceive(d);
         } else if (m.t === 'pi') {
             if (d && typeof d === 'object') send('po', {to: uid, n: num(d.n, 0, 1e9) | 0}, false);
         } else if (m.t === 'po') {
@@ -333,6 +432,9 @@
         net.transports.forEach(function (tr) { tr.leave(); });
         net.transports = [];
         for (var id in net.peers) dropPeer(id);
+        net.queue.length = 0;
+        expedition = {round: -1, targets: [], players: Object.create(null)};
+        laserRelayMask = 0;
         net.rc = null;
         if (net.kind === 'off') return;
         var gen = net.gen, room = net.roomName;
@@ -446,6 +548,25 @@
             if (text) send('ch', text);
         },
         sendEmote: function (e) { send('em', e | 0); },
+        expedition: expeditionView,
+        expeditionPhoto: function (key) {
+            var e = expeditionCurrent();
+            if (net.kind === 'off' || e.targets.indexOf(key) < 0) return false;
+            var p = e.players[net.uid];
+            if (!p) p = e.players[net.uid] = {name: 'Viandante', photos: Object.create(null)};
+            if (p.photos[key] !== undefined) return false;
+            p.name = clean(net.profile && net.profile.n, MAX_NAME) || 'Viandante';
+            p.photos[key] = Date.now();
+            expeditionBroadcast();
+            return true;
+        },
+        laserRelay: function (index) {
+            if (!Number.isInteger(index) || index < 0 || index > 2 || (laserRelayMask & (1 << index))) return false;
+            laserRelayMask |= 1 << index;
+            laserRelayBroadcast();
+            return true;
+        },
+        laserRelays: function () { return laserRelayMask; },
         // eventi dall'ultima lettura, una riga ciascuno
         poll: function () {
             for (var id in net.peers) {

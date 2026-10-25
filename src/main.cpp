@@ -158,6 +158,7 @@ static void AdvanceTime(float dt) {
 static void UpdateFrame(float rdt) {
     G.time += rdt;
     NetUpdate(rdt);
+    LaserMissionUpdate(rdt);
     for (auto& m : G.messages) m.t -= rdt;
     G.messages.erase(std::remove_if(G.messages.begin(), G.messages.end(), [](const Message& m) { return m.t <= 0; }), G.messages.end());
     if (G.bigMsgT > 0) G.bigMsgT -= rdt;
@@ -306,6 +307,7 @@ static void DrawWorld() {
     DrawSigns(zone, cam);
     EntitiesDrawShadows(cam);
     NetDraw3D(cam);
+    LaserMissionDraw3D();
     FxDraw(cam);
     if (G.state == GS_PLAY || G.state == GS_LOOT) DrawViewModel();
     EndMode3D();
@@ -323,6 +325,7 @@ static void DrawFrame() {
         case GS_PLAY:
             HudDraw();
             NetDrawHud();
+            LaserMissionDrawHud();
 #if DUSTFALL_WEB
             if (!PlatformPointerLocked() && !PlatformTouch() && G.fade == 0) {
                 UIRect(UIW() / 2 - 250, 456, 500, 34, Color{0, 0, 0, 160});
@@ -858,6 +861,43 @@ static int RunSelfTest() {
     Check(FindInterByTag("vault_door_in")->open && G.flags["vault_opened"], "mondo aperto: la porta del Rifugio è aperta");
     Sim(1.5f);
     Check(QUESTS[Q_MAIN].stage == 30, "mondo aperto: Ferrocittà scoperta, la storia prosegue");
+    // --- SOS Lucciola e blaster: colpi reali, ricompensa unica e salvataggio ---
+    LaserMissionUpdate(0);
+    Check(P.inv.Count(I_BLASTER) == 1 && G.flags["lucciola_started"], "SOS Lucciola: blaster di soccorso ricevuto");
+    P.tool = TOOL_BLASTER;
+    for (int i = 0; i < 3; i++) {
+        Vector3 relay = LaserRelayPosition(i);
+        Vector3 ground = V3(relay.x, TerrainHeight(relay.x, relay.z), relay.z);
+        Check(!CircleBlocked(ZONE_WASTE, ground, 0.35f, 1.75f), "ripetitore raggiungibile sul terreno");
+        G.cam.position = relay + V3(0, 0, 6);
+        G.cam.target = relay;
+        P.ap = 100;
+        P.useCd = 0;
+        FireBlaster();
+        Check(G.flags["lucciola_relay" + std::to_string(i)] == 1 && P.ap == 92, "il laser riattiva il ripetitore e consuma 8 PA");
+    }
+    Vector3 drone = LaserMissionDronePosition();
+    P.pos = V3(drone.x, TerrainHeight(drone.x, drone.z), drone.z + 1);
+    int laserXP = P.xp, laserCaps = P.inv.Count(I_CAPS);
+    Check(LaserMissionInteract() && G.flags["lucciola_done"], "Lucciola recuperata dopo i tre segnali");
+    Check(P.xp == laserXP + 200 && P.inv.Count(I_CAPS) == laserCaps + 150 && !LaserMissionInteract(), "premio SOS Lucciola erogato una sola volta");
+    Check(SaveGame(5) && LoadGame(5) && G.flags["lucciola_done"] && P.inv.Count(I_BLASTER) == 1, "blaster e missione conservati nel salvataggio");
+    Entity pulseRobot;
+    pulseRobot.kind = EK_ROBOT;
+    pulseRobot.hostile = true;
+    pulseRobot.pos = V3(0, TerrainHeight(0, 70) + 20, 70);
+    G.ents.push_back(pulseRobot);
+    Vector3 robotCenter = EntityCenter(G.ents.back());
+    G.cam.position = robotCenter + V3(0, 0, 5);
+    G.cam.target = robotCenter;
+    P.useCd = 0;
+    P.ap = 100;
+    FireBlaster();
+    Check(G.ents.back().stunT == 6 && !G.ents.back().off, "il blaster sovraccarica la sentinella senza spegnerla definitivamente");
+    EntitiesUpdate(6.1f);
+    Check(G.ents.back().stunT == 0, "la sentinella recupera dopo il sovraccarico");
+    LaserMissionUpdate(0.1f);
+    DrawFrame();
     printf("=== %s (%d errori) ===\n", sFail ? "FALLITO" : "SUPERATO", sFail);
     return sFail ? 1 : 0;
 }

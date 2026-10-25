@@ -5,6 +5,8 @@
 static std::vector<Particle> sParts;
 static std::vector<Throwable> sThrown;
 static std::vector<DynLight> sDynLights;
+struct LaserBeam { Vector3 from, to; float life; int zone; };
+static std::vector<LaserBeam> sLasers;
 
 // ---------------------------------------------------------------------------
 //  Particelle e luci
@@ -37,6 +39,17 @@ void SpawnImpact(int zone, Vector3 p, Vector3 n, bool metal) {
 void SpawnDynLight(int zone, Vector3 p, Color c, float range, float t) {
     if (sDynLights.size() > 32) return;
     sDynLights.push_back({p, c, range, t, zone});
+}
+
+void SpawnLaser(int zone, Vector3 from, Vector3 to) {
+    if (zone < 0 || zone >= ZONE_COUNT || Vector3DistanceSqr(from, to) < 0.0001f) return;
+    if (sLasers.size() >= 64) sLasers.erase(sLasers.begin());
+    sLasers.push_back({from, to, 0.18f, zone});
+    SpawnDynLight(zone, from, Col(70, 255, 215), 7, 0.12f);
+    SpawnDynLight(zone, to, Col(90, 255, 235), 5, 0.18f);
+    for (int i = 0; i < 7; i++)
+        SpawnParticle(zone, to, V3(gRng.range(-1.8f, 1.8f), gRng.range(0.4f, 2.5f), gRng.range(-1.8f, 1.8f)),
+                      gRng.range(0.15f, 0.3f), 0.045f, Col(130, 255, 225), 3.0f, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,6 +158,8 @@ void EmittersUpdate(int zone, Vector3 camPos, float dt) {
 }
 
 void FxUpdate(float dt) {
+    for (auto& laser : sLasers) laser.life -= dt;
+    sLasers.erase(std::remove_if(sLasers.begin(), sLasers.end(), [](const LaserBeam& laser) { return laser.life <= 0; }), sLasers.end());
     for (auto& p : sParts) {
         p.life -= dt;
         p.vel.y -= p.gravity * dt;
@@ -187,6 +202,16 @@ void FxDraw(Camera3D cam) {
     rlDrawRenderBatchActive();
     // particelle additive
     BeginBlendMode(BLEND_ADDITIVE);
+    rlDisableDepthMask();
+    for (const auto& laser : sLasers) {
+        if (laser.zone != zone) continue;
+        float fade = Clamp01(laser.life / 0.18f);
+        DrawBeam(laser.from, laser.to, 0.045f, ColAlpha(Col(30, 180, 155), fade * 0.7f));
+        DrawBeam(laser.from, laser.to, 0.012f, ColAlpha(Col(200, 255, 245), fade));
+        DrawBillboard(cam, R.softDot, laser.to, 0.5f * fade, ColAlpha(Col(100, 255, 220), fade));
+    }
+    rlDrawRenderBatchActive();
+    rlEnableDepthMask();
     for (auto& p : sParts) {
         if (p.zone != zone || !p.additive) continue;
         float k = Clamp01(p.life / p.maxLife);
@@ -217,6 +242,7 @@ void FxClear() {
     sParts.clear();
     sThrown.clear();
     sDynLights.clear();
+    sLasers.clear();
 }
 
 // ---------------------------------------------------------------------------

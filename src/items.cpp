@@ -71,6 +71,9 @@ void ItemsInit() {
     ITEMS[I_CAMERA].tool = TOOL_CAMERA;
     ITEMS[I_BAIT].tool = TOOL_BAIT;
     ITEMS[I_NOISE].tool = TOOL_NOISE;
+    Def(I_BLASTER, "Blaster a impulsi", IT_TOOL, 1.2f, 160,
+        "Un blaster di soccorso a energia. 5 per equipaggiarlo, clic per sparare (8 PA). Riattiva i ripetitori di Lucciola e sovraccarica le sentinelle per 6 secondi.");
+    ITEMS[I_BLASTER].tool = TOOL_BLASTER;
 
     Def(I_VAULTSUIT, "Tuta del Rifugio 33", IT_ARMOR, 1, 10, "Blu e gialla, con il numero 33 sulla schiena.");
     Def(I_JACKET, "Giacca da viaggio", IT_ARMOR, 4, 120, "Robusta e piena di tasche: porti più oggetti.");

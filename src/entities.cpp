@@ -123,6 +123,7 @@ const char* EntityState(const Entity& e) {
     if (e.companion) return "Ti segue";
     if (!e.hostile) return "Tranquillo";
     if (e.off) return "Spento";
+    if (e.stunT > 0) return "In sovraccarico";
     if (e.asleep) return "Dorme";
     if (e.ai == AI_DISTRACT) return "Distratto dall'esca";
     if (e.ai == AI_SEARCH) return "Indaga su un rumore";
@@ -559,6 +560,12 @@ void EntitiesUpdate(float dt) {
     G.chased = false;
     for (int i = 0; i < (int)G.ents.size(); i++) {
         Entity& e = G.ents[i];
+        if (e.stunT > 0) {
+            e.stunT = std::max(0.0f, e.stunT - dt);
+            e.vel = V3(0, 0, 0);
+            e.moveAmt = 0;
+            if (e.stunT > 0) continue;
+        }
         if (e.companion) {
             if (e.voiceCd > 0) e.voiceCd -= dt;
             Vector3 before = e.pos;
@@ -651,6 +658,20 @@ void DrawToolModel(const Matrix& m, int tool, float flash) {
             DrawPrim(PR_CYL, MatTRS(V3(0, 0.02f, 0.03f), V3(0, 0, 0), V3(0.07f, 0.11f, 0.07f)) * m, Col(150, 150, 140));
             DrawPrim(PR_CYL, MatTRS(V3(0, 0.03f, 0.03f), V3(0, 0, 0), V3(0.072f, 0.04f, 0.072f)) * m, Col(190, 60, 50));
             break;
+        case TOOL_BLASTER: {
+            // Impugnatura inclinata, corpo in metallo e bobina energetica visibile.
+            P(PR_CUBE, m, V3(0, -0.055f, -0.025f), V3(0.055f, 0.15f, 0.075f), Col(38, 42, 47), 0, V3(-0.22f, 0, 0));
+            P(PR_CUBE, m, V3(0, 0.025f, 0.055f), V3(0.105f, 0.085f, 0.25f), Col(65, 76, 85));
+            P(PR_CUBE, m, V3(0, 0.071f, 0.025f), V3(0.045f, 0.025f, 0.13f), Col(145, 159, 168));
+            DrawPrim(PR_CYL, MatTRS(V3(0, 0.025f, 0.205f), V3(PI / 2, 0, 0), V3(0.055f, 0.11f, 0.055f)) * m, Col(34, 45, 51));
+            DrawPrim(PR_CYL, MatTRS(V3(0, 0.025f, 0.264f), V3(PI / 2, 0, 0), V3(0.035f, 0.012f, 0.035f)) * m, Col(100, 255, 235), 1.0f);
+            P(PR_CUBE, m, V3(0.057f, 0.025f, 0.035f), V3(0.013f, 0.047f, 0.11f), Col(65, 230, 180), 0.8f);
+            for (int i = 0; i < 3; i++)
+                P(PR_CUBE, m, V3(-0.055f, 0.025f, 0.015f + i * 0.035f), V3(0.012f, 0.05f, 0.012f), Col(145, 174, 178));
+            if (flash > 0)
+                P(PR_SPHERE, m, V3(0, 0.025f, 0.29f), V3(0.09f, 0.09f, 0.15f), Col(170, 255, 240), 1.0f);
+            break;
+        }
         default: break;
     }
 }

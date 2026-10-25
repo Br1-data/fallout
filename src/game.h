@@ -139,7 +139,7 @@ extern const char* SKILL_DESC[SK_COUNT];
 extern const int SKILL_GOV[SK_COUNT];
 
 enum ItemType { IT_TOOL, IT_ARMOR, IT_AID, IT_MISC, IT_KEY };
-enum Tool { TOOL_HANDS, TOOL_CAMERA, TOOL_BAIT, TOOL_NOISE, TOOL_COUNT };
+enum Tool { TOOL_HANDS, TOOL_CAMERA, TOOL_BAIT, TOOL_NOISE, TOOL_BLASTER, TOOL_COUNT };
 
 enum SfxId {
     SFX_SHUTTER, SFX_ALARM, SFX_CAUGHT, SFX_RATTLE, SFX_STEALTH, SFX_REPAIR, SFX_CLIMB, SFX_SWING, SFX_SNIFF,
@@ -148,7 +148,7 @@ enum SfxId {
     SFX_ROACH, SFX_GROWL, SFX_GHOUL, SFX_ROBOT, SFX_ROAR, SFX_MUTANT, SFX_DOG, SFX_BARK, SFX_DOOR, SFX_VAULTDOOR,
     SFX_PIN_TURN, SFX_PIN_BREAK, SFX_UNLOCK, SFX_TYPE, SFX_TERM_OK, SFX_TERM_FAIL, SFX_SCAN_IN, SFX_SCAN_OUT,
     SFX_HURT, SFX_FAINT, SFX_STIM, SFX_EAT, SFX_JUMP, SFX_LAND, SFX_BOUNCE, SFX_SPARK, SFX_SNORE,
-    SFX_COUNT
+    SFX_LASER, SFX_COUNT
 };
 
 struct ItemDef {
@@ -176,6 +176,7 @@ enum ItemId {
     I_BOBBYPIN, I_REPAIRKIT, I_PARTS, I_SCRAP, I_TINCAN, I_TOASTER, I_TEDDY, I_CLOCK, I_BOTTLE, I_FUSE, I_CIRCUIT, I_COMIC,
     // missione / chiavi
     I_MEDSUPPLIES, I_KEYCARD, I_FUSIONCELL, I_JOURNAL, I_CACHEKEY, I_SCOUTNOTE, I_SAFEKEY, I_RECORD, I_ROTFOOD, I_MAINTCODE,
+    I_BLASTER, // aggiunto in fondo per conservare gli ID dei salvataggi esistenti
     I_COUNT
 };
 
@@ -394,6 +395,7 @@ struct Entity {
     Vector3 lastSeen{};
     Vector3 distractPos{};
     float distractT = 0;
+    float stunT = 0;          // sovraccarico temporaneo da impulso laser
     float losTimer = 0;
     bool los = false;
     float strafe = 1;
@@ -523,6 +525,16 @@ void FxDraw(Camera3D cam);
 void SpawnParticle(int zone, Vector3 p, Vector3 v, float life, float size, Color c, float gravity, bool additive, float grow = 0);
 void SpawnImpact(int zone, Vector3 p, Vector3 n, bool metal);
 void SpawnDynLight(int zone, Vector3 p, Color c, float range, float t);
+void SpawnLaser(int zone, Vector3 from, Vector3 to);
+void FireBlaster();
+void LaserMissionUpdate(float dt);
+void LaserMissionDraw3D();
+void LaserMissionDrawHud();
+bool LaserMissionHit(Vector3 origin, Vector3 direction, float maxDistance, Vector3& hit);
+bool LaserMissionInteract();
+Vector3 LaserRelayPosition(int index);
+Vector3 LaserMissionDronePosition();
+void LaserMissionMapDraw(const std::function<Vector2(Vector3)>& toMap, std::string& hover);
 void ThrowObject(int zone, Vector3 p, Vector3 v, int kind);
 void EmittersUpdate(int zone, Vector3 camPos, float dt);
 void FxCollectLights(int zone, std::vector<LightSrc>& out);

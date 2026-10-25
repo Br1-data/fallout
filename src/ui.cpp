@@ -328,7 +328,8 @@ void HudDraw() {
     Bar(rx, by + 4, 230, 14, P.ap / MaxAP(), PIP);
     int ti = ToolItem(P.tool);
     std::string tool = ToolName(P.tool);
-    if (ti >= 0 && P.tool != TOOL_CAMERA) tool += Fmt("  x%d", P.inv.Count(ti));
+    if (P.tool == TOOL_BLASTER) tool += "  8 PA / colpo";
+    else if (ti >= 0 && P.tool != TOOL_CAMERA) tool += Fmt("  x%d", P.inv.Count(ti));
     UIText(tool, rx + 230, by - 30, 24, PIP, 2);
     UIText(Fmt("B) Esche %d   G) Barattoli %d   H) Kit %d", P.inv.Count(I_BAIT), P.inv.Count(I_NOISE), P.inv.Count(I_MEDKIT)), rx, by + 22, 15, PIP_DIM);
 
