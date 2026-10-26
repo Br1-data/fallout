@@ -1,16 +1,16 @@
-// Pip-Boy, baratto, saccheggio e avanzamento di livello.
+// Pip-Boy, baratto, raccolta e avanzamento di livello.
 #include "game.h"
 #include "net.h"
 
-static const char* TABS[] = {"STAT", "INV", "DATI", "MAPPA", "RADIO"};
+static const char* TABS[] = {"STAT", "INV", "DIARIO", "MAPPA", "RADIO"};
 static const char* SUBTABS[][5] = {
     {"STATO", "S.P.E.C.I.A.L.", "ABILITÀ", "TALENTI", "GENERALE"},
-    {"ARMI", "ABBIGLIAMENTO", "AIUTI", "VARIE", "MUNIZIONI"},
-    {"MISSIONI", "LUOGHI", "", "", ""},
+    {"ATTREZZI", "ABBIGLIAMENTO", "AIUTI", "VARIE", ""},
+    {"MISSIONI", "LUOGHI", "CATALOGO", "RETE", ""},
     {"", "", "", "", ""},
     {"", "", "", "", ""},
 };
-static const int SUBCOUNT[] = {5, 5, 2, 1, 1};
+static const int SUBCOUNT[] = {5, 4, 4, 1, 1};
 
 struct PipRect { float x, y, w, h; };
 
@@ -40,11 +40,10 @@ static std::vector<int> InvList(int sub) {
         ItemType t = ITEMS[s.id].type;
         bool ok = false;
         switch (sub) {
-            case 0: ok = t == IT_WEAPON; break;
+            case 0: ok = t == IT_TOOL; break;
             case 1: ok = t == IT_ARMOR; break;
             case 2: ok = t == IT_AID; break;
             case 3: ok = (t == IT_MISC || t == IT_KEY) && s.id != I_CAPS; break;
-            case 4: ok = t == IT_AMMO; break;
         }
         if (ok) out.push_back(s.id);
     }
@@ -55,28 +54,48 @@ static std::vector<int> InvList(int sub) {
 static std::vector<std::string> ItemStats(int id) {
     std::vector<std::string> s;
     const ItemDef& d = ITEMS[id];
-    if (d.type == IT_WEAPON) {
-        const WeaponDef& w = WEAPONS[d.weapon];
-        if (w.model == WM_GRENADE) s.push_back(Fmt("DAN %d (area)", (int)w.damage));
-        else s.push_back(Fmt("DAN %d%s", (int)roundf(WeaponDamage(w)), w.pellets > 1 ? Fmt(" x%d", w.pellets).c_str() : ""));
-        s.push_back(Fmt("PA %d", w.apCost));
-        if (!w.melee && w.model != WM_GRENADE) {
-            s.push_back(Fmt("Cadenza %.1f colpi/s", 1.0f / w.fireDelay));
-            s.push_back(Fmt("Gittata %d m", (int)w.range));
-            s.push_back(Fmt("Caricatore %d", w.mag));
-            if (w.ammo >= 0) s.push_back(Fmt("Munizioni: %s (%d)", ITEMS[w.ammo].name, G.player.inv.Count(w.ammo)));
+    if (d.type == IT_TOOL) {
+        if (d.tool == TOOL_CAMERA) {
+            s.push_back("Clic sinistro: scatta una foto");
+            s.push_back("Clic destro: zoom");
+            s.push_back(Fmt("Foto nel catalogo: %d / %d", (int)G.player.photos.size(), (int)PHOTO_SUBJECTS.size()));
+        } else if (d.tool == TOOL_BAIT) {
+            float dur = 12.0f + SkillValue(SK_NATURE) * 0.12f;
+            if (G.player.perks[PK_ANIMALFRIEND]) dur *= 1.5f;
+            s.push_back(Fmt("Attira gli animali per %d s", (int)dur));
+            s.push_back(Fmt("Raggio %d m", (int)(22 + SkillValue(SK_NATURE) * 0.1f)));
+            s.push_back("Lancio: clic sinistro o tasto B");
+        } else if (d.tool == TOOL_NOISE) {
+            s.push_back(Fmt("Rumore udibile a %d m", 25 + (G.player.perks[PK_THROWER] ? 8 : 0)));
+            s.push_back("Distrae persone, mutanti e robot");
+            s.push_back("Lancio: clic sinistro o tasto G");
+        } else if (d.tool == TOOL_SCANNER) {
+            s.push_back("5: equipaggia, clic: analizza un indizio");
+            s.push_back("Esamina terreno, segnali e dispositivi");
+            s.push_back("Avvicinati e guarda il punto da studiare");
+        } else if (d.tool == TOOL_MULTITOOL) {
+            s.push_back("6: equipaggia, clic: usa sul dispositivo");
+            s.push_back("Ripristina i collegamenti della rete");
+            s.push_back("E permette anche le riparazioni sul posto");
+        } else if (d.tool == TOOL_RECORDER) {
+            s.push_back("7: equipaggia, clic: ascolta e registra");
+            s.push_back("Raccoglie voci e sequenze dell'Atlante");
+            s.push_back("Segui gli indizi e l'ordine dei segnali");
         }
-        s.push_back(Fmt("Abilità: %s %d", SKILL_NAMES[w.skill], SkillValue(w.skill)));
     } else if (d.type == IT_ARMOR) {
-        s.push_back(Fmt("RD %d", (int)d.dr));
         if (d.radRes > 0) s.push_back(Fmt("Res. radiazioni +%d%%", (int)(d.radRes * 100)));
+        if (d.sneak) s.push_back(Fmt("Furtività %+d", d.sneak));
+        if (d.carry) s.push_back(Fmt("Peso trasportabile %+d", d.carry));
+        if (d.talk) s.push_back(Fmt("Eloquenza e Baratto %+d", d.talk));
+        if (id == I_EXOSUIT) s.push_back("Molto rumoroso quando cammini");
     } else if (d.type == IT_AID) {
-        if (d.heal > 0) s.push_back(Fmt("PF +%d", (int)d.heal));
+        if (d.heal > 0) s.push_back(Fmt("Energia +%d", (int)d.heal));
         if (d.rads != 0) s.push_back(Fmt("RAD %+d", (int)d.rads));
         if (d.radX > 0) s.push_back("Res. radiazioni +50% (3 min)");
-        if (d.ap > 0) s.push_back(Fmt("PA +%d", (int)d.ap));
-        if (id == I_JET) s.push_back("Rallenta il tempo (12 s)");
-        if (id == I_MENTATS) s.push_back("INT +2, PER +2 (2 min)");
+        if (d.ap > 0) s.push_back(Fmt("Fiato +%d", (int)d.ap));
+        if (d.stealth > 0) s.push_back(Fmt("Quasi invisibile per %d s", (int)d.stealth));
+        if (id == I_HERBTEA) s.push_back("INT +2, PER +2 (2 min)");
+        if (id == I_COFFEE) s.push_back("Recupero del fiato raddoppiato (1 min)");
     }
     s.push_back(Fmt("Peso %.1f   Valore %d", d.weight, d.value));
     return s;
@@ -87,17 +106,25 @@ static const char* KarmaTitle(int k) {
     if (k >= 100) return "Protettore";
     if (k >= 25) return "Viandante onesto";
     if (k > -25) return "Neutrale";
-    if (k > -100) return "Furfante";
-    if (k > -250) return "Predatore";
-    return "Flagello delle Terre Bruciate";
+    if (k > -100) return "Viandante riservato";
+    if (k > -250) return "Estraneo";
+    return "Ancora da conoscere";
+}
+
+static bool ResearchTool(int id) {
+    return id == I_SCANNER || id == I_MULTITOOL || id == I_RECORDER;
 }
 
 void DropItem(int id) {
+    if (ResearchTool(id) && G.player.inv.Count(id) <= 1) {
+        Notify("Conserva questo strumento nel tuo kit di ricerca: serve per proseguire il viaggio.");
+        return;
+    }
     if (ITEMS[id].type == IT_KEY) {
         Notify("Non puoi lasciare un oggetto di missione.");
         return;
     }
-    if (id == G.player.weapon && G.player.inv.Count(id) == 1) EquipWeapon(id);
+    if (id == G.player.armor && G.player.inv.Count(id) == 1) EquipArmor(id);
     TakeItem(id, 1);
     Interactable it;
     it.type = INT_ITEM;
@@ -130,7 +157,7 @@ static void DrawVaultFigure(float cx, float cy, float s, float hpFrac) {
     L(0, 20, 22, 74);
     L(-22, 74, -34, 74);
     L(22, 74, 34, 74);
-    const char* st = hpFrac > 0.7f ? "IN SALUTE" : (hpFrac > 0.35f ? "AFFATICATO" : "ESAUSTO");
+    const char* st = hpFrac > 0.7f ? "IN FORMA" : (hpFrac > 0.35f ? "AFFATICATO" : "ESAUSTO");
     UIText(st, cx, cy + 90 * s, 20, hpFrac > 0.35f ? PIP : Col(255, 120, 90), 1);
 }
 
@@ -167,7 +194,7 @@ void PipBoyUpdate() {
     int count = 0;
     if (G.pipTab == 0) count = G.pipSub == 1 ? ST_COUNT : (G.pipSub == 2 ? SK_COUNT : (G.pipSub == 3 ? PK_COUNT : 0));
     else if (G.pipTab == 1) count = (int)InvList(G.pipSub).size();
-    else if (G.pipTab == 2) count = G.pipSub == 0 ? Q_COUNT : (int)W.locations.size();
+    else if (G.pipTab == 2) count = G.pipSub == 0 ? Q_COUNT : (G.pipSub == 1 ? (int)W.locations.size() : (G.pipSub == 2 ? (int)PHOTO_SUBJECTS.size() : 6));
     else if (G.pipTab == 4) count = 3;
     float wheel = GetMouseWheelMove();
     if ((IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN) || wheel < -0.5f) && count > 0) { G.pipSel = (G.pipSel + 1) % count; PlaySfx(SFX_UI_MOVE, 0.5f); }
@@ -206,8 +233,8 @@ void PipBoyUpdate() {
             if (!l.discovered) continue;
             float px = mx + (l.pos.x + WORLD_HALF) / (WORLD_HALF * 2) * ms, py = my + (l.pos.z + WORLD_HALF) / (WORLD_HALF * 2) * ms;
             if (UIClicked(px - 10, py - 10, 20, 20)) {
-                if (G.inCombat || HostilesNear(50)) {
-                    Notify("Non puoi viaggiare con dei nemici nelle vicinanze.", Col(255, 160, 100));
+                if (G.chased || HostilesNear(50)) {
+                    Notify("Non puoi viaggiare mentre qualcuno ti insegue.", Col(255, 160, 100));
                     PlaySfx(SFX_UI_BACK);
                 } else {
                     float dist = DistXZ(P.pos, l.pos);
@@ -226,7 +253,7 @@ void PipBoyUpdate() {
         int who = NetMapClick([&](Vector3 p) { return V2(mx + (p.x + WORLD_HALF) / (WORLD_HALF * 2) * ms, my + (p.z + WORLD_HALF) / (WORLD_HALF * 2) * ms); });
         if (who >= 0) {
             const RemotePlayer& rp = NetPlayers()[who];
-            if (G.inCombat || HostilesNear(50)) {
+            if (G.chased || HostilesNear(50)) {
                 Notify("Non puoi viaggiare mentre qualcuno ti insegue.", Col(255, 160, 100));
                 PlaySfx(SFX_UI_BACK);
             } else {
@@ -266,7 +293,7 @@ void PipBoyDraw() {
     float by = r.y + r.h - 62;
     UIRect(r.x + 20, by - 6, r.w - 40, 2, PIP_DIM);
     int hours = (int)G.timeOfDay, mins = (int)((G.timeOfDay - hours) * 60);
-    std::string info = Fmt("PF %d/%d    PA %d/%d    LV %d    PE %d/%d    Peso %d/%d    Tappi %d    Giorno %d  %02d:%02d",
+    std::string info = Fmt("EN %d/%d    FI %d/%d    LV %d    PE %d/%d    Peso %d/%d    Tappi %d    Giorno %d  %02d:%02d",
                            (int)P.hp, (int)MaxHP(), (int)P.ap, (int)MaxAP(), P.level, P.xp, XPForLevel(P.level + 1), (int)P.inv.Weight(), (int)CarryMax(), P.inv.Count(I_CAPS), G.day, hours, mins);
     UIText(info, r.x + r.w / 2, by + 4, 17, PIP, 1);
 
@@ -297,18 +324,19 @@ void PipBoyDraw() {
                 y += 40;
                 UIText(Fmt("Livello %d    PE %d / %d", P.level, P.xp, XPForLevel(P.level + 1)), rx, y, 20, PIP);
                 y += 30;
-                UIText(Fmt("Resistenza %d / %d", (int)P.hp, (int)HPCap()), rx, y, 20, PIP); y += 26;
-                UIText(Fmt("PA %d / %d", (int)P.ap, (int)MaxAP()), rx, y, 20, PIP); y += 26;
+                UIText(Fmt("Energia %d / %d", (int)P.hp, (int)HPCap()), rx, y, 20, PIP); y += 26;
+                UIText(Fmt("Fiato %d / %d", (int)P.ap, (int)MaxAP()), rx, y, 20, PIP); y += 26;
                 UIText(Fmt("RAD %d   (resistenza %d%%)", (int)P.rads, (int)(PlayerRadRes() * 100)), rx, y, 20, P.rads > 200 ? Col(255, 230, 80) : PIP); y += 26;
-                UIText(Fmt("Protezione dagli impulsi %d", (int)PlayerDR()), rx, y, 20, PIP); y += 26;
-                UIText(Fmt("Karma: %s (%d)", KarmaTitle(P.karma), P.karma), rx, y, 20, PIP); y += 40;
+                UIText(Fmt("Foto nel catalogo %d / %d", (int)P.photos.size(), (int)PHOTO_SUBJECTS.size()), rx, y, 20, PIP); y += 26;
+                UIText(Fmt("Reputazione: %s (%d)", KarmaTitle(P.karma), P.karma), rx, y, 20, PIP); y += 40;
                 UIText("EFFETTI", rx, y, 20, PIP_DIM); y += 28;
                 bool any = false;
                 auto Eff = [&](const std::string& s) { UIText(s, rx + 10, y, 18, PIP); y += 24; any = true; };
                 if (P.radXTimer > 0) Eff(Fmt("Anti-Rad (%ds)", (int)P.radXTimer));
-                if (P.mentatsTimer > 0) Eff(Fmt("Mentalix (%ds)", (int)P.mentatsTimer));
-                if (P.jetTimer > 0) Eff(Fmt("Scheggia (%ds)", (int)P.jetTimer));
-                if (P.rads >= 200) Eff(Fmt("Avvelenamento da radiazioni: -%d PF max", (int)(MaxHP() - HPCap())));
+                if (P.teaTimer > 0) Eff(Fmt("Tisana del deserto (%ds)", (int)P.teaTimer));
+                if (P.coffeeTimer > 0) Eff(Fmt("Caffè d'anteguerra (%ds)", (int)P.coffeeTimer));
+                if (P.stealthT > 0) Eff(Fmt("Mantello ottico (%ds)", (int)P.stealthT));
+                if (P.rads >= 200) Eff(Fmt("Esposizione ambientale: -%d energia max", (int)(MaxHP() - HPCap())));
                 if (P.inv.Weight() > CarryMax()) Eff("Sovraccarico: movimento rallentato");
                 if (!any) UIText("Nessuno", rx + 10, y, 18, PIP_DARK);
                 if (P.pendingLevels > 0) {
@@ -347,14 +375,17 @@ void PipBoyDraw() {
                     UIText(b, lx + 460, y, 20, PIP, 2);
                     y += 30;
                 };
-                Row("Karma", Fmt("%s (%d)", KarmaTitle(P.karma), P.karma));
+                Row("Reputazione", Fmt("%s (%d)", KarmaTitle(P.karma), P.karma));
                 Row("Missioni completate", Fmt("%d", P.questsDone));
                 Row("Luoghi scoperti", Fmt("%d / %d", (int)std::count_if(W.locations.begin(), W.locations.end(), [](const Location& l) { return l.discovered; }), (int)W.locations.size()));
-                Row("Avversari storditi", Fmt("%d", P.incapacitations));
+                Row("Foto scattate", Fmt("%d", (int)P.photos.size()));
+                Row("Riparazioni", Fmt("%d", P.repairs));
+                Row("Distrazioni riuscite", Fmt("%d", P.distractions));
+                Row("Volte scoperto", Fmt("%d", P.timesCaught));
                 Row("Serrature scassinate", Fmt("%d", P.locksPicked));
-                Row("Terminali violati", Fmt("%d", P.termsHacked));
-                Row("Stimpak usati", Fmt("%d", P.stimpaksUsed));
-                Row("Colpi sparati", Fmt("%d", P.shots));
+                Row("Terminali decifrati", Fmt("%d", P.termsHacked));
+                Row("Kit medici usati", Fmt("%d", P.medkitsUsed));
+                Row("Strada percorsa", Fmt("%.1f km", P.walked / 1000.0f));
                 Row("Tappi guadagnati", Fmt("%d", P.capsEarned));
                 Row("Tempo di gioco", Fmt("%dh %02dm", (int)(P.playTime / 3600), ((int)P.playTime / 60) % 60));
                 break;
@@ -368,7 +399,7 @@ void PipBoyDraw() {
         for (int i = 0; i < (int)list.size(); i++) {
             int id = list[i];
             int n = P.inv.Count(id);
-            bool eq = id == P.weapon || id == P.armor;
+            bool eq = (P.tool != TOOL_HANDS && id == ToolItem(P.tool)) || id == P.armor;
             std::string name = ITEMS[id].name;
             if (n > 1) name += Fmt(" (%d)", n);
             float y = ly + i * 30 - G.pipScroll;
@@ -387,7 +418,10 @@ void PipBoyDraw() {
             for (auto& s : st) { UIText(s, rx, y, 19, PIP); y += 26; }
             y += 10;
             for (auto& l : UIWrap(ITEMS[id].desc, 18, rw)) { UIText(l, rx, y, 18, PIP_DIM); y += 22; }
-            const char* act = ITEMS[id].type == IT_WEAPON || ITEMS[id].type == IT_ARMOR ? ((id == P.weapon || id == P.armor) ? "INVIO) Togli" : "INVIO) Equipaggia") : (ITEMS[id].type == IT_AID ? "INVIO) Usa" : (id == I_SCOUTNOTE ? "INVIO) Leggi" : ""));
+            bool eqd = (P.tool != TOOL_HANDS && id == ToolItem(P.tool)) || id == P.armor;
+            const char* act = ITEMS[id].type == IT_TOOL ? (eqd ? "INVIO) In mano" : "INVIO) Prendi in mano")
+                              : ITEMS[id].type == IT_ARMOR ? (eqd ? "INVIO) Togli" : "INVIO) Indossa")
+                              : (ITEMS[id].type == IT_AID ? "INVIO) Usa" : ((id == I_SCOUTNOTE || id == I_MAINTCODE) ? "INVIO) Leggi" : ""));
             UIText(std::string(act) + (ITEMS[id].type != IT_KEY ? "    X) Lascia" : ""), rx, r.y + r.h - 100, 18, PIP_DIM);
         }
     } else if (G.pipTab == 2) {
@@ -413,9 +447,61 @@ void PipBoyDraw() {
                     }
                 } else UIText("Completata.", rx, y, 20, PIP_DIM);
             }
-        } else {
+        } else if (G.pipSub == 1) {
             int k = 0;
             for (auto& l : W.locations) ListRow(k++, l.discovered ? l.name : "???", l.discovered ? Fmt("%d m", (int)DistXZ(P.pos, l.pos)) : "");
+        } else if (G.pipSub == 2) {
+            // catalogo fotografico delle Terre Bruciate
+            int n = (int)PHOTO_SUBJECTS.size();
+            float maxRows = (r.h - 200) / 30;
+            G.pipScroll = std::max(0.0f, (G.pipSel - maxRows + 2) * 30);
+            BeginScissorMode((int)(r.x * UIS()), (int)((ly - 4) * UIS()), (int)(r.w * UIS()), (int)((r.h - 180) * UIS()));
+            for (int i = 0; i < n; i++) {
+                const PhotoSubject& ps = PHOTO_SUBJECTS[i];
+                bool have = HasPhoto(ps.key);
+                float y = ly + i * 30 - G.pipScroll;
+                bool sel = i == G.pipSel;
+                if (sel) UIRect(lx - 6, y - 3, rx - lx - 30, 28, PIP_DARK);
+                if (have) UIRect(lx, y + 8, 8, 8, PIP);
+                UIText(have ? ps.name : (ps.landmark ? "??? (luogo)" : "??? (creatura)"), lx + 16, y, 20, sel ? Color{200, 255, 210, 255} : (have ? PIP : PIP_DIM));
+                if (have) UIText(Fmt("%d PE", ps.xp), rx - 44, y, 18, PIP_DIM, 2);
+            }
+            EndScissorMode();
+            if (n > 0) {
+                const PhotoSubject& ps = PHOTO_SUBJECTS[Clamp(G.pipSel, 0, n - 1)];
+                bool have = HasPhoto(ps.key);
+                UIText(Fmt("CATALOGO  %d / %d", (int)P.photos.size(), n), rx, ly, 24, PIP);
+                float fx = rx, fy = ly + 44, fw = rw - 20, fh = 150;
+                UIRectLines(fx, fy, fw, fh, 2, PIP_DIM);
+                if (have) {
+                    // "stampa" stilizzata: orizzonte e sagoma
+                    UIRect(fx + 4, fy + fh * 0.62f, fw - 8, fh * 0.38f - 4, PIP_DARK);
+                    UIText(ps.landmark ? "[ PAESAGGIO ]" : "[ CREATURA ]", fx + fw / 2, fy + fh / 2 - 12, 22, PIP, 1);
+                    UIText(ps.name, rx, fy + fh + 14, 22, PIP);
+                    float y = fy + fh + 48;
+                    for (auto& l : UIWrap(ps.desc, 18, rw)) { UIText(l, rx, y, 18, PIP_DIM); y += 22; }
+                } else {
+                    UIText("?", fx + fw / 2, fy + fh / 2 - 22, 44, PIP_DARK, 1);
+                    UIText("Non ancora fotografato.", rx, fy + fh + 14, 20, PIP_DIM);
+                    UIText(ps.landmark ? "Un luogo notevole delle Terre Bruciate." : "Una creatura delle Terre Bruciate.", rx, fy + fh + 44, 18, PIP_DIM);
+                }
+            }
+        } else {
+            UIText("L'ATLANTE DELL'ALBA", rx, ly, 24, PIP);
+            int complete = 0;
+            for (int q = Q_ECHO; q <= Q_BEACON; q++) complete += QUESTS[q].done;
+            UIText(Fmt("Collegamenti ricostruiti: %d / 6", complete), rx, ly + 36, 19, PIP_DIM);
+            for (int i = 0; i < 6; i++) {
+                const Quest& q = QUESTS[Q_ECHO + i];
+                ListRow(i, std::string(q.done ? "[+] " : q.stage > 0 ? "[>] " : "[ ] ") + q.title, "");
+            }
+            int q = Q_ECHO + Clamp(G.pipSel, 0, 5);
+            std::string note = QUESTS[q].stage > 0 ? QuestDescription(q) : "Questo tratto della rete attende ancora di essere esplorato. Segui le missioni attive e parla con le persone incontrate lungo il cammino.";
+            float y = ly + 84;
+            for (auto& l : UIWrap(note, 19, rw)) { UIText(l, rx, y, 19, PIP); y += 25; }
+            y += 22;
+            UIText("Scanner: studia. Registratore: ascolta.", rx, y, 17, PIP_DIM);
+            UIText("Multiutensile: riconnetti. Nessuna fretta.", rx, y + 24, 17, PIP_DIM);
         }
     } else if (G.pipTab == 3) {
         float ms = std::min(r.h - 190, r.w * 0.6f);
@@ -489,25 +575,19 @@ void PipBoyDraw() {
 // ---------------------------------------------------------------------------
 static Inventory* LootInv() {
     if (G.lootInter >= 0) return &G.inters[G.lootInter].inv;
-    if (G.lootEnt >= 0) return &G.ents[G.lootEnt].inv;
     return nullptr;
 }
 
-void LootOpen(int inter, int ent) {
+void LootOpen(int inter) {
     G.lootInter = inter;
-    G.lootEnt = ent;
+    G.lootEnt = -1;
     G.pipSel = 0;
     PlaySfx(SFX_DOOR, 0.5f, 1.4f);
-    if (inter >= 0) {
-        Interactable& it = G.inters[inter];
-        if (it.tag == "cache" && !QUESTS[Q_SIGNAL].done) {
-            if (QUESTS[Q_SIGNAL].stage == 0) QUESTS[Q_SIGNAL].stage = 10;
-            CompleteQuest(Q_SIGNAL);
-        }
-        if (it.tag == "power_armor" && !G.flags["found_power"]) {
-            G.flags["found_power"] = 1;
-            BigNotify("ARMATURA POTENZIATA", "Il sogno di ogni abitante delle Terre Bruciate");
-        }
+    Interactable& it = G.inters[inter];
+    if (it.tag == "cache" && QUESTS[Q_SIGNAL].stage == 40) CompleteQuest(Q_SIGNAL);
+    if (it.tag == "exosuit" && !G.flags["found_exo"]) {
+        G.flags["found_exo"] = 1;
+        BigNotify("ESOSCHELETRO DA CARICO", "Porta qualsiasi cosa. Peccato per il fracasso.");
     }
     SetGameState(GS_LOOT);
 }
@@ -535,7 +615,7 @@ void LootUpdate() {
     if (take && n > 0) {
         ItemStack s = inv->items[G.pipSel];
         int cnt = s.count;
-        if (s.id == I_CAPS && G.player.perks[PK_FORTUNE] && G.lootInter >= 0) cnt *= 2;
+        if (s.id == I_CAPS && G.player.perks[PK_FORTUNE]) cnt *= 2;
         inv->Remove(s.id, s.count);
         GiveItem(s.id, cnt, false);
         PlaySfx(SFX_PICKUP);
@@ -543,7 +623,7 @@ void LootUpdate() {
     if (IsKeyPressed(KEY_R) || UIClicked(x + 10, y + 420, 200, 30)) {
         for (auto& s : inv->items) {
             int cnt = s.count;
-            if (s.id == I_CAPS && G.player.perks[PK_FORTUNE] && G.lootInter >= 0) cnt *= 2;
+            if (s.id == I_CAPS && G.player.perks[PK_FORTUNE]) cnt *= 2;
             GiveItem(s.id, cnt, false);
         }
         if (!inv->Empty()) PlaySfx(SFX_PICKUP);
@@ -559,7 +639,7 @@ void LootDraw() {
     float x = Wd / 2 - 300, y = 170, w = 600, h = 470;
     UIRect(x, y, w, h, Color{4, 18, 9, 225});
     UIRectLines(x, y, w, h, 2, PIP);
-    std::string title = G.lootInter >= 0 ? G.inters[G.lootInter].name : G.ents[G.lootEnt].name;
+    std::string title = G.inters[G.lootInter].name;
     UIText(title, x + 20, y + 14, 26, PIP);
     UIRect(x + 10, y + 50, w - 20, 2, PIP_DIM);
     if (inv->Empty()) UIText("Vuoto.", x + 20, y + 64, 20, PIP_DIM);
@@ -588,7 +668,7 @@ static std::vector<int> PlayerSellable() {
     std::vector<int> out;
     for (auto& s : G.player.inv.items) {
         if (s.id == I_CAPS || ITEMS[s.id].type == IT_KEY || ITEMS[s.id].value <= 0) continue;
-        int n = s.count - ((s.id == G.player.weapon || s.id == G.player.armor) ? 1 : 0);
+        int n = s.count - ((s.id == G.player.armor || ResearchTool(s.id)) ? 1 : 0);
         if (n > 0) out.push_back(s.id);
     }
     return out;
@@ -648,7 +728,7 @@ void BarterUpdate() {
         int id = theirs[sBarterSel[1]];
         int price = BuyPrice(id);
         if (G.player.inv.Count(I_CAPS) < price) { Notify("Non hai abbastanza tappi."); PlaySfx(SFX_UI_BACK); return; }
-        int qty = ITEMS[id].type == IT_AMMO ? std::min(v.inv.Count(id), 10) : 1;
+        int qty = 1;
         int total = 0;
         for (int k = 0; k < qty && G.player.inv.Count(I_CAPS) >= price; k++) {
             v.inv.Remove(id, 1);

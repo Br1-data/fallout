@@ -121,7 +121,7 @@ static void AddChat(const std::string& text, Color col) {
     if (sChat.size() > 40) sChat.erase(sChat.begin());
 }
 
-static bool LocalInGame() { return G.state != GS_MENU && G.state != GS_INTRO && G.state != GS_CREATE && G.state != GS_INCAPACITATED; }
+static bool LocalInGame() { return G.state != GS_MENU && G.state != GS_INTRO && G.state != GS_CREATE && G.state != GS_FAINT; }
 
 #if DUSTFALL_WEB
 static int sFlashN = 0;
@@ -204,7 +204,7 @@ static void HandleEvent(const std::string& line) {
         r.name = f[2];
         r.level = atoi(f[3].c_str());
         r.female = atoi(f[4].c_str()) != 0;
-        r.outfit = Clamp(atoi(f[5].c_str()), 0, OF_BARMAN);
+        r.outfit = Clamp(atoi(f[5].c_str()), 0, OF_DARK);
         r.where = f[6];
         UpdateLook(r);
         if (!r.announced) AddChat(r.name + " è nelle Terre Bruciate (" + r.where + ").", CHAT_SYS);
@@ -223,20 +223,13 @@ static void HandleEvent(const std::string& line) {
         r.netYaw = v[4];
         r.speed = Clamp(v[6], 0.0f, 20.0f);
         r.crouch = v[7] > 0.5f;
-        r.weaponModel = Clamp((int)v[8], 0, WM_GRENADE);
+        r.tool = Clamp((int)v[8], 0, TOOL_COUNT - 1);
         int flashN = (int)v[9], waveN = (int)v[10];
         r.inGame = v[11] > 0.5f;
         bool near = r.inGame && zone == G.player.zone && Vector3Distance(p, G.player.pos) < 60 && LocalInGame();
         if (r.flashN >= 0 && flashN != r.flashN) {
             r.flashT = 0.25f;
-            if (r.weaponModel != WM_FIST && r.zone == G.player.zone) {
-                Vector3 origin = p + V3(0, 1.45f, 0);
-                Vector3 direction = V3(cosf(v[5]) * sinf(v[4]), sinf(v[5]), cosf(v[5]) * cosf(v[4]));
-                RayHit hit{};
-                float distance = RaycastWorld(r.zone, origin, direction, 95, hit) ? hit.t : 95;
-                SpawnTracer(r.zone, origin, origin + direction * distance, Col(80, 235, 255), 0.035f, 0.16f);
-            }
-            if (near) PlaySfx3D(SFX_LASER, p + V3(0, 1.6f, 0), 0.7f);
+            if (near && r.tool == TOOL_CAMERA) PlaySfx3D(SFX_SHUTTER, p + V3(0, 1.6f, 0), 0.7f);
         }
         if (r.waveN >= 0 && waveN != r.waveN) r.waveT = 2.4f;
         r.flashN = flashN;
@@ -283,14 +276,14 @@ void NetUpdate(float dt) {
     if (sProfileT <= 0) {
         sProfileT = 1;
         std::string json = "{\"n\":" + JsonStr(P.name) + ",\"l\":" + std::to_string(P.level) + ",\"f\":" + (P.female ? "1" : "0") +
-                           ",\"o\":" + std::to_string(ArmorOutfit()) + ",\"w\":" + JsonStr(inGame ? PlayerWhere() : std::string("Menu principale")) + ",\"v\":1}";
+                           ",\"o\":" + std::to_string(ArmorOutfit()) + ",\"w\":" + JsonStr(inGame ? PlayerWhere() : std::string("Menu principale")) + ",\"v\":4}";
         js_net_profile(json.c_str());
     }
     bool flash = P.flash > 0;
     if (flash && !sPrevFlash) sFlashN++;
     sPrevFlash = flash;
     float st[12] = {(float)P.zone, P.pos.x, P.pos.y, P.pos.z, P.yaw, P.pitch, Vector3Length(V3(P.vel.x, 0, P.vel.z)), P.crouch ? 1.0f : 0.0f,
-                    (float)CurrentWeapon().model, (float)sFlashN, (float)sWaveN, inGame ? 1.0f : 0.0f};
+                    (float)P.tool, (float)sFlashN, (float)sWaveN, inGame ? 1.0f : 0.0f};
     js_net_state(st);
     std::string typed;
     if (PlatformTakeText("chat", typed) && !typed.empty()) {
@@ -324,13 +317,13 @@ void NetDraw3D(Camera3D cam) {
     if (!LocalInGame()) return;
     for (auto& r : sRemotes) {
         if (!Visible(r) || Vector3Distance(r.pos, cam.position) > 260) continue;
-        float hold = r.weaponModel != WM_FIST ? 0.7f : 0.0f;
+        float hold = r.tool == TOOL_CAMERA ? 1.0f : (r.tool != TOOL_HANDS ? 0.4f : 0.0f);
         float action = 0;
         if (r.waveT > 0) {
             hold = 0;
             action = 0.2f + 0.15f * sinf(G.time * 12.0f);
         }
-        DrawHumanoid(r.pos, r.yaw, r.look, r.anim, Clamp01(r.speed / 4.5f), hold, action, 0, r.weaponModel, r.flashT > 0 ? 1.0f : 0.0f, 1.0f, false, r.crouchT);
+        DrawHumanoid(r.pos, r.yaw, r.look, r.anim, Clamp01(r.speed / 4.5f), hold, action, 0, r.tool, r.flashT > 0 ? 1.0f : 0.0f, 1.0f, false, r.crouchT);
     }
     for (auto& r : sRemotes)
         if (Visible(r) && Vector3Distance(r.pos, cam.position) < 50) DrawCylinder(r.pos + V3(0, 0.03f, 0), 0.42f, 0.42f, 0.01f, 10, Color{0, 0, 0, 70});

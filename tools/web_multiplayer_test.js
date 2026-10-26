@@ -99,12 +99,12 @@ async function run() {
         await wait(a, () => DustfallNet.peerCount() === 1);
         await wait(b, () => DustfallNet.peerCount() === 1);
         const aId = await a.evaluate(() => DustfallNet.selfId());
-        await a.evaluate(() => DustfallNet.sendState([0,12.5,2,30,0.2,0,3,0,10,1,0,1]));
+        await a.evaluate(() => DustfallNet.sendState([0,12.5,2,30,0.2,0,3,0,6,1,0,1]));
         await wait(b, id => {
             const peer = DustfallNet.debug().peers[id];
-            return peer && peer.profile && peer.profile.n === 'Ada' && peer.state && peer.state[1] === 12.5 && peer.state[8] === 10;
+            return peer && peer.profile && peer.profile.n === 'Ada' && peer.state && peer.state[1] === 12.5 && peer.state[8] === 6;
         }, aId);
-        console.log('[OK] Due contesti indipendenti condividono profilo, posizione e fucile laser tramite MQTT cifrato.');
+        console.log('[OK] Due contesti indipendenti condividono profilo, posizione e registratore tramite MQTT cifrato.');
 
         await a.evaluate(() => { DustfallNet.sendChat('Avanziamo alla Base Delta-9!'); DustfallNet.sendEmote(1); });
         await wait(b, () => {
@@ -117,11 +117,11 @@ async function run() {
         const c = await makePage('Carla', room);
         await wait(c, id => {
             const peer = DustfallNet.debug().peers[id];
-            return peer && peer.state && peer.state[8] === 10 && peer.state[9] === 1;
+            return peer && peer.state && peer.state[8] === 6 && peer.state[9] === 1;
         }, aId);
         await a.evaluate(() => DustfallNet.bye());
+        await a.context().close(); // l'uscita reale interrompe anche gli heartbeat del browser
         await wait(b, () => DustfallNet.peerCount() === 1);
-        await a.context().close();
         assert.equal(await c.evaluate(() => DustfallNet.peerCount()), 1);
         console.log('[OK] Ingresso tardivo con stato corrente e uscita di un giocatore.');
 
@@ -136,19 +136,19 @@ async function run() {
         assert.equal(await b.evaluate(() => DustfallNet.poll().includes('Solo nella nuova stanza')), false);
         console.log('[OK] Le stanze isolano presenze e messaggi.');
 
-        // Input reale -> arma originale a energia -> ponte WASM -> altro browser.
-        const observer = await makePage('Osservatore', room + '-shot');
-        const game = await makePage('Gameplay', room + '-shot',
-            '--openworld --zone 0 --pos 0 76 --yaw 180 --pitch 45 --give all --name Collaudatore');
+        // Input reale -> fotografia del reattore -> ponte WASM -> altro browser.
+        const observer = await makePage('Osservatore', room + '-photo');
+        const game = await makePage('Gameplay', room + '-photo',
+            '--openworld --zone 1 --pos -22 15 --yaw 180 --pitch 15 --give all --name Collaudatore');
         await wait(game, () => document.documentElement.classList.contains('started') &&
-            DustfallNet.debug().self && DustfallNet.debug().self[11] === 1 && DustfallNet.debug().self[8] >= 9);
+            DustfallNet.debug().self && DustfallNet.debug().self[11] === 1 && DustfallNet.debug().self[8] === 1);
         await game.locator('#canvas').focus();
         await settleInput(game);
-        const shot = await game.evaluate(() => ({ id: DustfallNet.selfId(), flash: DustfallNet.debug().self[9], model: DustfallNet.debug().self[8] }));
+        const photo = await game.evaluate(() => ({ id: DustfallNet.selfId(), flash: DustfallNet.debug().self[9], model: DustfallNet.debug().self[8] }));
         await game.mouse.move(640, 360);
         await game.mouse.down();
         try {
-            await wait(game, before => DustfallNet.debug().self[9] > before, shot.flash);
+            await wait(game, before => DustfallNet.debug().self[9] > before, photo.flash);
         } catch (error) {
             console.error('Stato del giocatore:', await game.evaluate(() => DustfallNet.debug().self));
             throw error;
@@ -158,29 +158,51 @@ async function run() {
         await wait(observer, ({ id, flash, model }) => {
             const peer = DustfallNet.debug().peers[id];
             return peer && peer.state && peer.state[8] === model && peer.state[9] > flash;
-        }, shot);
-        console.log("[OK] Un vero colpo laser dell’arsenale originale raggiunge un altro browser tramite MQTT.");
+        }, photo);
+        console.log('[OK] Una fotografia scattata nel gioco si vede anche nell’altro browser tramite MQTT.');
+
+        async function selectTool(key, tool) {
+            await game.keyboard.down(key);
+            try { await wait(game, expected => DustfallNet.debug().self[8] === expected, tool); }
+            finally { await game.keyboard.up(key); }
+            await wait(observer, ({ id, tool }) => {
+                const peer = DustfallNet.debug().peers[id];
+                return peer && peer.state && peer.state[8] === tool;
+            }, { id: photo.id, tool });
+        }
+        await selectTool('Digit5', 4);
+        await selectTool('Digit7', 6);
+        console.log('[OK] Scanner e registratore equipaggiati si aggiornano anche per un compagno fermo.');
 
         async function quicksave() {
-            await game.evaluate(() => { try { Module.FS.unlink('/dustfall/saves-laser/slot6.sav'); } catch (_) {} });
+            await game.evaluate(() => { try { Module.FS.unlink('/dustfall/saves-atlas/slot6.sav'); } catch (_) {} });
             await game.keyboard.down('F5');
-            await wait(game, () => Module.FS.analyzePath('/dustfall/saves-laser/slot6.sav').exists);
+            await wait(game, () => Module.FS.analyzePath('/dustfall/saves-atlas/slot6.sav').exists);
             await game.keyboard.up('F5');
-            return game.evaluate(() => Module.FS.readFile('/dustfall/saves-laser/slot6.sav', { encoding: 'utf8' }));
+            return game.evaluate(() => Module.FS.readFile('/dustfall/saves-atlas/slot6.sav', { encoding: 'utf8' }));
         }
         await settleInput(game);
         const save = await quicksave();
         const lines = save.trim().split('\n');
-        assert.equal(lines[0], 'DUSTFALL_SAVE 3');
-        assert.ok(Number(lines[12].trim().split(/\s+/)[6]) > 0, 'il salvataggio conserva i colpi del vero combattimento');
-        console.log('[OK] Il browser salva il personaggio nel formato della campagna laser.');
+        assert.equal(lines[0], 'DUSTFALL_SAVE 4');
+        assert.equal(Number(lines[10].trim().split(/\s+/)[0]), 6, 'il registratore resta equipaggiato nel salvataggio');
+        const photos = lines[14].trim().split(/\s+/).slice(1);
+        if (!photos.includes('reactor')) {
+            console.error('Fotografie nel diario:', photos, 'posizione:', lines[11]);
+            if (process.env.DUSTFALL_TEST_ARTIFACTS) {
+                fs.mkdirSync(process.env.DUSTFALL_TEST_ARTIFACTS, { recursive: true });
+                await game.screenshot({ path: path.join(process.env.DUSTFALL_TEST_ARTIFACTS, 'photo-failure.png') });
+            }
+        }
+        assert.ok(photos.includes('reactor'), 'la fotografia realmente scattata entra nel diario persistente');
+        console.log('[OK] Il browser salva il personaggio nel formato della campagna esplorativa.');
         if (process.env.DUSTFALL_TEST_ARTIFACTS) {
             fs.mkdirSync(process.env.DUSTFALL_TEST_ARTIFACTS, { recursive: true });
             await game.screenshot({ path: path.join(process.env.DUSTFALL_TEST_ARTIFACTS, 'multiplayer.png') });
             await game.context().close();
             const mobile = await makePage('Touch', room + '-mobile',
                 '--openworld --zone 0 --pos 0 76 --yaw 180 --pitch 0 --give all --name Esploratrice', true);
-            await wait(mobile, () => document.documentElement.classList.contains('started') && DustfallNet.debug().self && DustfallNet.debug().self[8] >= 9);
+            await wait(mobile, () => document.documentElement.classList.contains('started') && DustfallNet.debug().self && DustfallNet.debug().self[8] === 1);
             await settleInput(mobile);
             await mobile.screenshot({ path: path.join(process.env.DUSTFALL_TEST_ARTIFACTS, 'mobile.png') });
         }

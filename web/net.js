@@ -13,13 +13,14 @@
 (function () {
     'use strict';
 
-    var APP_ID = 'dustfall-original-laser-v3';
+    var APP_ID = 'dustfall-atlas-v4';
     var MQTT_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
     var STATE_MS = 100;         // posizione: 10 volte al secondo mentre ci si muove
     var HEARTBEAT_MS = 3000;    // presenza e profilo
     var PEER_TIMEOUT_MS = 12000;
     var DIRECT_FRESH_MS = 5000; // un giocatore è "diretto" se lo abbiamo sentito via WebRTC da poco
     var MAX_NAME = 18, MAX_CHAT = 140, MAX_WHERE = 40;
+
     function clean(s, n) {
         return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
     }
@@ -47,10 +48,10 @@
     function sha256(text) { return subtle.digest('SHA-256', enc.encode(text)); }
     function hex(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (x) { return ('0' + x.toString(16)).slice(-2); }).join(''); }
     function roomCrypto(room) {
-        if (!subtle) return Promise.resolve({topic: 'dustfall/laser-v3/' + room, key: null});
-        return Promise.all([sha256('dustfall-laser-v3-argomento|' + room), sha256('dustfall-laser-v3-chiave|' + room)]).then(function (h) {
+        if (!subtle) return Promise.resolve({topic: 'dustfall/atlas-v4/' + room, key: null});
+        return Promise.all([sha256('dustfall-atlas-v4-argomento|' + room), sha256('dustfall-atlas-v4-chiave|' + room)]).then(function (h) {
             return subtle.importKey('raw', new Uint8Array(h[1]).slice(0, 16), 'AES-GCM', false, ['encrypt', 'decrypt']).then(function (key) {
-                return {topic: 'dustfall/laser-v3/' + hex(h[0]).slice(0, 32), key: key};
+                return {topic: 'dustfall/atlas-v4/' + hex(h[0]).slice(0, 32), key: key};
             });
         });
     }
@@ -298,7 +299,7 @@
             if (seq <= p.stateSeq || !Array.isArray(d) || d.length < 12) return;
             p.stateSeq = seq;
             p.state = [num(d[0], 0, 2) | 0, num(d[1], -2000, 2000), num(d[2], -500, 500), num(d[3], -2000, 2000),
-                       num(d[4], -10, 10), num(d[5], -2, 2), num(d[6], 0, 30), num(d[7], 0, 1) | 0, num(d[8], 0, 13) | 0,
+                       num(d[4], -10, 10), num(d[5], -2, 2), num(d[6], 0, 30), num(d[7], 0, 1) | 0, num(d[8], 0, 6) | 0,
                        num(d[9], 0, 1e6) | 0, num(d[10], 0, 1e6) | 0, num(d[11], 0, 1) | 0];
             p.stateNew = true;
         } else if (m.t === 'hb') {
@@ -429,7 +430,7 @@
         },
         sendState: function (s) {
             var now = Date.now(), last = net.lastState;
-            var changed = !last || s[9] !== last[9] || s[10] !== last[10] || s[11] !== last[11] || s[0] !== last[0] || s[7] !== last[7];
+            var changed = !last || s[9] !== last[9] || s[10] !== last[10] || s[11] !== last[11] || s[0] !== last[0] || s[7] !== last[7] || s[8] !== last[8];
             var moving = s[11] && (s[6] > 0.05 || !last || Math.abs(s[1] - last[1]) + Math.abs(s[3] - last[3]) > 0.02 || Math.abs(s[4] - last[4]) > 0.01);
             var interval = moving ? STATE_MS : 1000;
             if (!changed && now - net.lastStateSent < interval) return;

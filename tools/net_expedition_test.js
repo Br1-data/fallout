@@ -78,31 +78,33 @@ class Network {
 }
 
 
-const state = (model = 10, flash = 0, x = 1) => [0, x, 2, 3, 0, 0, 0, 0, model, flash, 0, 1];
+const state = (model = 6, flash = 0, x = 1) => [0, x, 2, 3, 0, 0, 0, 0, model, flash, 0, 1];
 
-test('due browser scoprono profili e modelli laser originali', () => {
+test('due browser scoprono profili e strumenti da esplorazione', () => {
     const n = new Network(), a = n.peer('Ada'), b = n.peer('Bruno');
     n.flush();
     assert.equal(a.api.peerCount(), 1);
     assert.equal(b.api.peerCount(), 1);
     assert.equal(a.api.status(), 2);
-    a.api.sendState(state(10, 1, 12.345)); n.flush();
+    a.api.sendState(state(6, 1, 12.345)); n.flush();
     const peer = plain(b.api.debug().peers)[a.api.selfId()];
     assert.equal(peer.profile.n, 'Ada');
     assert.equal(peer.state[1], 12.35);
-    assert.equal(peer.state[8], 10, 'il fucile laser non viene troncato al vecchio massimo 4');
+    assert.equal(peer.state[8], 6, 'il registratore non viene troncato al vecchio massimo 3');
     assert.equal(peer.state[9], 1);
     assert.ok(b.api.poll().includes('S\t' + a.api.selfId()));
+    a.api.sendState(state(4, 1, 12.345)); n.flush();
+    assert.equal(plain(b.api.debug().peers)[a.api.selfId()].state[8], 4, 'lo scanner si vede subito anche da fermi');
 });
 
 test('stato aggiornato una volta, duplicati e pacchetti vecchi non lo sovrascrivono', () => {
     const n = new Network(), a = n.peer('Ada'); n.flush(); a.api.poll();
-    n.inject(a, {u:'bruno',s:100,t:'st',d:state(13, 2, 20)});
+    n.inject(a, {u:'bruno',s:100,t:'st',d:state(5, 2, 20)});
     n.inject(a, {u:'bruno',s:99,t:'st',d:state(1, 0, -20)});
     n.inject(a, {u:'bruno',s:100,t:'st',d:state(2, 0, -30)});
     const peer = plain(a.api.debug().peers).bruno;
     assert.equal(peer.state[1], 20);
-    assert.equal(peer.state[8], 13);
+    assert.equal(peer.state[8], 5);
     assert.equal(peer.state[9], 2);
     assert.equal(a.api.poll().split('\n').filter(l => l.startsWith('S\t')).length, 1);
     assert.equal(a.api.poll(), '');
@@ -114,7 +116,7 @@ test('stato remoto resta entro i limiti e gli identificativi non alterano il pro
     assert.equal(a.api.peerCount(), 0);
     n.inject(a, {u:'constructor',s:1,t:'st',d:[9,1e8,-1e8,1e8,90,-90,80,7,99,1e9,-4,9]});
     const peer = plain(a.api.debug().peers).constructor;
-    assert.deepEqual(peer.state, [2,2000,-500,2000,10,-2,30,1,13,1000000,0,1]);
+    assert.deepEqual(peer.state, [2,2000,-500,2000,10,-2,30,1,6,1000000,0,1]);
     n.inject(a, {u:'constructor',s:2,t:'st',d:[]});
     assert.deepEqual(plain(a.api.debug().peers).constructor.state, peer.state);
 });
@@ -132,7 +134,7 @@ test('chat e saluti si ricevono una volta con pulizia del testo e anti-spam', ()
 
 test('nuovo arrivato riceve lo stato corrente e uscita rimuove la presenza', () => {
     const n = new Network(), a = n.peer('Ada'), b = n.peer('Bruno'); n.flush();
-    a.api.sendState(state(11, 4)); n.flush();
+    a.api.sendState(state(4, 4)); n.flush();
     const c = n.peer('Carla'); n.flush();
     assert.equal(plain(c.api.debug().peers)[a.api.selfId()].state[9], 4);
     a.close(); n.flush();

@@ -7,7 +7,7 @@
 
 struct RemotePlayer {
     std::string id, name = "Viandante", where, say;
-    int level = 1, outfit = OF_VAULT, zone = -1, weaponModel = WM_FIST;
+    int level = 1, outfit = OF_VAULT, zone = -1, tool = TOOL_HANDS;
     bool female = false, inGame = false, crouch = false, hasState = false, announced = false;
     Vector3 netPos{}, pos{};
     float netYaw = 0, yaw = 0, speed = 0, anim = 0, crouchT = 0;

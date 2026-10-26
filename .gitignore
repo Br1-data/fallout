@@ -1,5 +1,7 @@
 build/
 build-*/
 saves/
+saves-laser/
+saves-atlas/
 settings.cfg
 *.o
